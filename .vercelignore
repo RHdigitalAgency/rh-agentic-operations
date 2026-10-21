@@ -1,0 +1,11 @@
+# Never upload secrets, local data or build/packaging leftovers.
+.env
+.env.*
+!.env.example
+.data/
+.next/
+node_modules/
+*.zip
+*.tsbuildinfo
+source-docs/
+.claude/
