@@ -1,14 +1,14 @@
 # Project State
 
 Status: **v0.1 LIVE** — https://rh-agentic-operations.vercel.app (Vercel + Supabase Postgres). All P0 tasks done; owner sign-in confirmed 2026-10-20.
-Date: 2026-10-20
+Date: 2026-10-21
 
 ## What exists
 - Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 app (`src/`).
 - PostgreSQL schema as SQL migrations (`database/migrations/`), deterministic reference data, local demo seed.
 - Service layer (`src/server/`) holding all business rules and data-level RBAC. Pages, server actions and API routes are thin wrappers.
 - Pure, unit-tested domain logic (`src/domain/`): pipeline rules, scoring, ROI, KPI comparison, analytics, money.
-- 75 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
+- 81 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
 
 ## ⚠ Demo data in production
 Production currently contains the **removable demo dataset** (added 2026-10-21 for UI review: 13 demo companies, 7 demo users that cannot sign in). Before entering real clients run:
@@ -17,7 +17,7 @@ Production currently contains the **removable demo dataset** (added 2026-10-21 f
 ## Hosting
 - Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private). Connected to Vercel: push to `main` → production; other branches → preview.
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
-- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0002 are applied.
+- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0003 are applied. **0004 (sign-in lockout + audit credit) must be applied before branch `improvements` is merged to `main`** — the new sign-in code writes to `login_attempts`.
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
 - Vercel previews run on an isolated in-memory demo database (no production access). Each instance has its own demo data, so preview sessions can drop between pages — previews are for quick visual review; test flows locally.
 - UI: RH Digital Agency brand system (brand book in `assets/branding`, untracked), live since 2026-10-21.
@@ -40,11 +40,20 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 1. No Supabase Auth adapter (ADR-0003): no password-reset email or SSO. Admins set passwords in Settings.
 2. The ingestion rate limiter is in-memory per server instance. Add an edge limit (Vercel firewall) if the endpoint sees abuse.
 3. Period filters use UTC day boundaries. Dashboard sums are base-currency (USD) only, with no FX conversion.
-4. The audit-credit policy (fee credited within 30 days) is not modeled. Reflect it in the proposal amount/scope.
+4. ~~Audit credit not modeled~~ — done (branch `improvements`): opt-in per proposal, only after the audit is paid, within 30 days, once per audit, never on retainers; revenue analytics use the net amount.
 5. CAC is not computed: there is no acquisition-spend data yet (per the PDR).
-6. No UI to edit/delete individual effort or KPI rows. KPI edit exists in the service, with audit logging.
+6. ~~No UI to edit/delete effort or KPI rows~~ — done (branch `improvements`), owner or manager only, audit-logged.
 7. `npm audit` flags `braces` in the dev-only ESLint toolchain (not shipped). The available fix would downgrade eslint-config-next.
 8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. That setting breaks postgres.js `sql.begin`, so transactions use a reserved connection with explicit BEGIN/COMMIT (fixed 2026-10-20; writes were failing in production between the pipelining change and this fix). Re-run the real-Postgres suite after driver or schema changes.
+
+## Improvements round (branch `improvements`, 2026-10-21)
+- Security: account lockout after 5 failed sign-ins in 15 min (admin password reset lifts it); `/account` page to change own name and password (signs out other sessions).
+- Faster lead entry: one company field with suggestions that links to an existing account by name (no duplicates), individuals named after the contact, sensible defaults (Instagram source, "First outreach" due tomorrow 09:00), optional fields collapsed, "Create & add another".
+- Guidance: "Next step" banner on each opportunity, with a direct link.
+- Delivery: edit/delete effort and KPI rows; KPI name/unit suggestions; work date defaults to today.
+- Client documents: branded audit report (`/print/audits/{id}`) and proposal (`/print/proposals/{id}`), saved as PDF from the browser.
+- Audit credit (see gap 4).
+- Ideas not built yet: Spanish UI toggle, daily follow-up email digest, CAC once spend is tracked, error monitoring.
 
 ## Next actions
 0. Remove the demo data from production (`npm run demo:remove`, see top) before real use.

@@ -376,9 +376,23 @@ function parseUtm(input: unknown): Record<string, string> {
 export async function createLead(ctx: Ctx, input: Record<string, unknown>) {
   requireCap(ctx.user, "crm.write");
   const owner = await resolveOwner(ctx.db, ctx.user, input.owner_user_id ?? ctx.user.id);
-  const existingCompanyId = optStr(input.company_id, 64);
+  let existingCompanyId = optStr(input.company_id, 64);
   if (existingCompanyId) await assertCompanyVisible(ctx.db, ctx.user, existingCompanyId);
-  const companyInput = existingCompanyId ? null : companyFields({ ...input, name: input.company_name });
+  // One "Company" field: an exact (case-insensitive) match to a visible account links to it instead of creating a duplicate.
+  // A lead without a company (an individual) uses the contact name or Instagram handle as the account name.
+  const typedName = optStr(input.company_name, 200)
+    ?? optStr(input.contact_name, 200)
+    ?? (optStr(input.instagram_handle, 100) ? `@${String(input.instagram_handle).trim().replace(/^@/, "")}` : null);
+  if (!existingCompanyId && !typedName) throw new ValidationError("Enter a company or a contact name");
+  if (!existingCompanyId && optStr(input.company_name, 200)) {
+    const q = new Sql();
+    const [match] = await ctx.db.query<{ id: string }>(
+      `select c.id from companies c where lower(c.name) = lower(${q.p(typedName)}) and c.archived_at is null and ${companyVisible(q, ctx.user, "c")} limit 1`,
+      q.params,
+    );
+    existingCompanyId = match?.id ?? null;
+  }
+  const companyInput = existingCompanyId ? null : companyFields({ ...input, name: typedName });
   if (companyInput) await assertRef(ctx.db, "ref_verticals", companyInput.vertical, "vertical");
   const hasContact = ["contact_name", "email", "phone", "instagram_handle"].some((k) => optStr(input[k]));
   const estimated = input.estimated_value_cents === undefined || input.estimated_value_cents === null || input.estimated_value_cents === ""

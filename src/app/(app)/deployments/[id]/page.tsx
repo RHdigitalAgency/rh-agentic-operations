@@ -1,13 +1,22 @@
 import Link from "next/link";
 import { load, requireCtx } from "@/lib/auth/current";
 import {
-  addEffortAction, addKpiAction, addQaItemAction, deploymentStatusAction, saveAgentRoleAction, updateDeploymentAction, updateQaItemAction,
+  addEffortAction, addKpiAction, deleteEffortAction, deleteKpiAction, updateEffortAction, updateKpiAction, addQaItemAction, deploymentStatusAction, saveAgentRoleAction, updateDeploymentAction, updateQaItemAction,
 } from "@/app/actions";
 import { DEPLOYMENT_STATUSES, getDeploymentWorkspace, type AgentRoleRow } from "@/server/deployments";
 import { listActiveUsers } from "@/server/crm";
 import { Badge, Card, Empty, Field, fmtDate, fmtNum, fmtPct, Hidden, Money, PageHeader, Stat, StatusBadge, Stepper, type Step } from "@/components/ui";
 import { BarChart3, Bot, Clock, Coins, FileText, Gauge, ShieldCheck, Target, TestTube2, TrendingUp, TriangleAlert } from "lucide-react";
 import { SubmitButton } from "@/components/SubmitButton";
+import { todayLocal } from "@/lib/validate";
+
+/** Common operational KPIs for agentic deployments (suggestions only; any metric name is allowed). */
+const KPI_SUGGESTIONS: [string, string][] = [
+  ["lead_response_minutes", "minutes"], ["leads_unanswered_pct", "%"], ["missed_calls_pct", "%"], ["no_show_rate_pct", "%"],
+  ["appointments_booked", "per month"], ["estimate_visits_booked", "per month"], ["hours_saved", "hours/month"],
+  ["status_calls_per_week", "calls/week"], ["backlog_items", "items"], ["error_rate_pct", "%"], ["revenue_recovered", "USD/month"],
+  ["documents_collected_on_time_pct", "%"], ["recall_reactivations", "per month"], ["review_requests_sent", "per month"],
+];
 import { formatCents } from "@/domain/money";
 
 export const metadata = { title: "Deployment" };
@@ -199,20 +208,45 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
           {w ? (
             <form action={addEffortAction} className="mb-3 grid gap-2 md:grid-cols-5">
               <Hidden name="deployment_id" value={id} />
-              <input className="input" type="date" name="work_date" />
-              <input className="input" name="hours" placeholder="Hours" inputMode="decimal" />
+              <input className="input" type="date" name="work_date" defaultValue={todayLocal()} aria-label="Work date" />
+              <input className="input" name="hours" placeholder="Hours" inputMode="decimal" aria-label="Hours" />
               <input className="input" name="direct_cost__money" placeholder={`Direct cost ${cur}`} />
               <input className="input" name="description" placeholder="What" />
               <SubmitButton className="btn">Log</SubmitButton>
             </form>
           ) : null}
           {ws.effort.length === 0 ? <Empty>No effort logged.</Empty> : (
-            <table className="table">
-              <thead><tr><th>Date</th><th className="text-right">Hours</th><th className="text-right">Direct cost</th><th>Description</th></tr></thead>
-              <tbody>{ws.effort.map((e) => (
-                <tr key={e.id}><td>{fmtDate(e.work_date)}</td><td className="text-right">{fmtNum(e.hours)}</td><td className="text-right">{ws.financials ? <Money cents={e.direct_cost_cents} currency={cur} /> : "—"}</td><td>{e.description} <span className="text-xs text-slate-500">{e.user_name}</span></td></tr>
-              ))}</tbody>
-            </table>
+            <ul className="divide-y divide-mist text-sm">
+              {ws.effort.map((e) => (
+                <li key={e.id} className="py-2">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="w-24 text-slate-500">{fmtDate(e.work_date)}</span>
+                    <span className="w-14 text-right font-medium tabular-nums">{fmtNum(e.hours)} h</span>
+                    <span className="w-20 text-right tabular-nums">{ws.financials ? <Money cents={e.direct_cost_cents} currency={cur} /> : "—"}</span>
+                    <span className="min-w-0 flex-1">{e.description} <span className="text-xs text-slate-400">{e.user_name}</span></span>
+                  </div>
+                  {w ? (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs text-rh">Edit or delete</summary>
+                      <div className="mt-2 flex flex-wrap items-end gap-2">
+                        <form action={updateEffortAction} className="flex flex-wrap items-end gap-2">
+                          <Hidden name="id" value={e.id} /><Hidden name="deployment_id" value={id} />
+                          <input className="input w-36" type="date" name="work_date" defaultValue={e.work_date} aria-label="Work date" />
+                          <input className="input w-20" name="hours" defaultValue={e.hours} aria-label="Hours" />
+                          <input className="input w-28" name="direct_cost__money" defaultValue={(e.direct_cost_cents / 100).toFixed(2)} aria-label="Direct cost" />
+                          <input className="input w-48" name="description" defaultValue={e.description ?? ""} aria-label="Description" />
+                          <SubmitButton className="btn">Save</SubmitButton>
+                        </form>
+                        <form action={deleteEffortAction}>
+                          <Hidden name="id" value={e.id} /><Hidden name="deployment_id" value={id} />
+                          <SubmitButton className="btn btn-danger" confirm="Delete this effort entry? The change is recorded in the audit trail.">Delete</SubmitButton>
+                        </form>
+                      </div>
+                    </details>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
       </div>
@@ -233,11 +267,40 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
             ))}</tbody>
           </table>
         )}
+        {w && ws.kpis.length ? (
+          <details className="mt-3 rounded-lg border border-frost">
+            <summary className="cursor-pointer px-3 py-2 text-sm text-rh">All measurements ({ws.kpis.length}) — correct or delete</summary>
+            <ul className="divide-y divide-mist border-t border-frost px-3">
+              {ws.kpis.map((k) => (
+                <li key={k.id} className="py-2">
+                  <form action={updateKpiAction} className="grid items-end gap-2 md:grid-cols-8">
+                    <Hidden name="id" value={k.id} /><Hidden name="deployment_id" value={id} />
+                    <input className="input md:col-span-2" name="metric_key" defaultValue={k.metric_key} aria-label="Metric" list="kpi-metrics" />
+                    <input className="input" name="unit" defaultValue={k.unit} aria-label="Unit" />
+                    <select className="input" name="measurement_type" defaultValue={k.measurement_type} aria-label="Type"><option>BASELINE</option><option>TARGET</option><option>RESULT</option></select>
+                    <input className="input" name="value" defaultValue={k.value} aria-label="Value" />
+                    <input className="input" type="date" name="window_start" defaultValue={k.window_start ?? ""} aria-label="Window start" />
+                    <input className="input" type="date" name="window_end" defaultValue={k.window_end ?? ""} aria-label="Window end" />
+                    <input className="input" name="benefit_monthly__money" defaultValue={k.benefit_monthly_cents === null ? "" : (k.benefit_monthly_cents / 100).toFixed(2)} aria-label="Monthly benefit" placeholder="$ benefit/mo" />
+                    <input type="hidden" name="notes" value={k.notes ?? ""} />
+                    <div className="flex gap-2 md:col-span-8">
+                      <SubmitButton className="btn">Save</SubmitButton>
+                    </div>
+                  </form>
+                  <form action={deleteKpiAction} className="mt-1">
+                    <Hidden name="id" value={k.id} /><Hidden name="deployment_id" value={id} />
+                    <SubmitButton className="btn btn-ghost text-xs text-red-700" confirm="Delete this measurement? The change is recorded in the audit trail.">Delete measurement</SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         {w ? (
           <form action={addKpiAction} className="mt-3 grid gap-2 md:grid-cols-8">
             <Hidden name="deployment_id" value={id} />
-            <input className="input md:col-span-2" name="metric_key" placeholder="metric_key e.g. lead_response_minutes" required />
-            <input className="input" name="unit" placeholder="unit" required />
+            <input className="input md:col-span-2" name="metric_key" placeholder="Metric, e.g. lead_response_minutes" list="kpi-metrics" required />
+            <input className="input" name="unit" placeholder="Unit, e.g. minutes" list="kpi-units" required />
             <select className="input" name="measurement_type" defaultValue="BASELINE"><option>BASELINE</option><option>TARGET</option><option>RESULT</option></select>
             <input className="input" name="value" placeholder="value" required />
             <input className="input" type="date" name="window_start" title="Window start" />
@@ -271,6 +334,12 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
           {w ? <div className="mt-3"><SubmitButton>Save narrative</SubmitButton></div> : null}
         </form>
       </Card>
+      <datalist id="kpi-metrics">
+        {KPI_SUGGESTIONS.map(([key, unit]) => <option key={key} value={key}>{unit}</option>)}
+      </datalist>
+      <datalist id="kpi-units">
+        {[...new Set(KPI_SUGGESTIONS.map(([, u]) => u))].map((u) => <option key={u} value={u} />)}
+      </datalist>
     </div>
   );
 }

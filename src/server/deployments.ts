@@ -60,7 +60,7 @@ export interface DeploymentRow {
 
 const SELECT = `
   select d.*, c.name as company_name, c.vertical, coalesce(v.regulated,false) as regulated,
-    p.title as proposal_title, p.proposal_type, p.amount_cents as revenue_cents, p.currency, p.opportunity_id,
+    p.title as proposal_title, p.proposal_type, (p.amount_cents - p.audit_credit_cents) as revenue_cents, p.currency, p.opportunity_id,
     u.full_name as owner_name,
     coalesce((select sum(e.hours) from deployment_effort_entries e where e.deployment_id = d.id), 0) as hours,
     coalesce((select sum(e.direct_cost_cents) from deployment_effort_entries e where e.deployment_id = d.id), 0) as direct_cost_cents
@@ -325,21 +325,55 @@ export async function updateQaItem(ctx: Ctx, qaId: string, input: Record<string,
 // ---------------------------------------------------------------------------
 // Effort (hours + direct cost) — gross margin is derived from these records
 // ---------------------------------------------------------------------------
-export async function addEffortEntry(ctx: Ctx, deploymentId: string, input: Record<string, unknown>) {
-  await getWritableDeployment(ctx, deploymentId);
+function effortFields(input: Record<string, unknown>) {
   const hours = optNum(input.hours, "Hours", { min: 0, max: 1000 }) ?? 0;
   const cost = input.direct_cost_cents === undefined || input.direct_cost_cents === "" || input.direct_cost_cents === null ? 0 : Number(input.direct_cost_cents);
   if (!Number.isSafeInteger(cost) || cost < 0) throw new ValidationError("Direct cost must be a non-negative amount");
   if (hours === 0 && cost === 0) throw new ValidationError("Enter hours and/or direct cost");
-  const workDate = optDay(input.work_date, "Work date") ?? todayLocal();
+  return { work_date: optDay(input.work_date, "Work date") ?? todayLocal(), hours, direct_cost_cents: cost, description: optStr(input.description, 1000) };
+}
+
+export async function addEffortEntry(ctx: Ctx, deploymentId: string, input: Record<string, unknown>) {
+  await getWritableDeployment(ctx, deploymentId);
+  const f = effortFields(input);
   return ctx.db.transaction(async (tx) => {
     const [row] = await tx.query<{ id: string }>(
       "insert into deployment_effort_entries(deployment_id, work_date, hours, direct_cost_cents, description, user_id) values ($1,$2,$3,$4,$5,$6) returning id",
-      [deploymentId, workDate, hours, cost, optStr(input.description, 1000), ctx.user.id],
+      [deploymentId, f.work_date, f.hours, f.direct_cost_cents, f.description, ctx.user.id],
     );
-    await logAudit(tx, ctx.user, "effort_entry", row.id, "create", null, { deploymentId, workDate, hours, direct_cost_cents: cost });
+    await logAudit(tx, ctx.user, "effort_entry", row.id, "create", null, { deploymentId, ...f });
     return row.id;
   });
+}
+
+async function writableEffortEntry(ctx: Ctx, entryId: string) {
+  const [e] = await ctx.db.query<{ deployment_id: string; work_date: string; hours: number; direct_cost_cents: number; description: string | null }>(
+    "select deployment_id, work_date, hours, direct_cost_cents, description from deployment_effort_entries where id = $1",
+    [entryId],
+  );
+  assertFound(e, "Effort entry");
+  await getWritableDeployment(ctx, e.deployment_id);
+  return e;
+}
+
+/** Corrections keep a full before/after trail, since effort drives delivery cost and gross margin. */
+export async function updateEffortEntry(ctx: Ctx, entryId: string, input: Record<string, unknown>) {
+  const before = await writableEffortEntry(ctx, entryId);
+  const f = effortFields(input);
+  await ctx.db.transaction(async (tx) => {
+    await tx.query("update deployment_effort_entries set work_date=$2, hours=$3, direct_cost_cents=$4, description=$5 where id=$1", [entryId, f.work_date, f.hours, f.direct_cost_cents, f.description]);
+    await logAudit(tx, ctx.user, "effort_entry", entryId, "update", before, f);
+  });
+  return before.deployment_id;
+}
+
+export async function deleteEffortEntry(ctx: Ctx, entryId: string) {
+  const before = await writableEffortEntry(ctx, entryId);
+  await ctx.db.transaction(async (tx) => {
+    await tx.query("delete from deployment_effort_entries where id = $1", [entryId]);
+    await logAudit(tx, ctx.user, "effort_entry", entryId, "delete", before, null);
+  });
+  return before.deployment_id;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,6 +428,17 @@ export async function updateKpiMeasurement(ctx: Ctx, kpiId: string, input: Recor
     );
     await logAudit(tx, ctx.user, "kpi_measurement", kpiId, "update", k, f);
   });
+}
+
+export async function deleteKpiMeasurement(ctx: Ctx, kpiId: string) {
+  const [k] = await ctx.db.query<KpiRow & { deployment_id: string }>("select * from kpi_measurements where id = $1", [kpiId]);
+  assertFound(k, "KPI measurement");
+  await getWritableDeployment(ctx, k.deployment_id);
+  await ctx.db.transaction(async (tx) => {
+    await tx.query("delete from kpi_measurements where id = $1", [kpiId]);
+    await logAudit(tx, ctx.user, "kpi_measurement", kpiId, "delete", k, null);
+  });
+  return k.deployment_id;
 }
 
 // ---------------------------------------------------------------------------

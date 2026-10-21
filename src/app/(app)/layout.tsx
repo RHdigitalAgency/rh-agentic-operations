@@ -44,13 +44,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <NavLinks items={NAV.filter((n) => can(user, n.cap)).map(({ href, label, icon }) => ({ href, label, icon }))} />
         <div className="mt-auto hidden border-t border-white/10 p-4 md:block">
-          <div className="flex items-center gap-3">
+          <Link href="/account" className="flex items-center gap-3 rounded-lg p-1 -m-1 hover:bg-white/6 hover:no-underline" title="My account">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-rh text-xs font-semibold text-white ring-2 ring-white/15">{initials(name)}</span>
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-white">{name}</div>
-              <div className="truncate text-xs text-white/55">{ROLE_LABELS[user.role]}</div>
+              <div className="truncate text-xs text-white/55">{ROLE_LABELS[user.role]} · My account</div>
             </div>
-          </div>
+          </Link>
           <form action={logoutAction} className="mt-3">
             <button className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-white/60 hover:bg-white/6 hover:text-white" type="submit">
               <LogOut className="size-3.5" aria-hidden /> Sign out

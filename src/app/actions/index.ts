@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { authenticate, createSession, deleteSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { createSession, deleteSession, hashSessionToken, LOCKOUT_WINDOW_MINUTES, SESSION_COOKIE, signIn } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/auth/current";
 import { AppError } from "@/lib/errors";
@@ -28,8 +28,11 @@ const back = (fd: FormData, fallback: string) => {
 // ---------------------------------------------------------------------------
 export async function loginAction(fd: FormData) {
   const db = await getDb();
-  const user = await authenticate(db, s(fd, "email"), s(fd, "password"));
-  if (!user) redirect("/login?error=Invalid%20email%20or%20password");
+  const result = await signIn(db, s(fd, "email"), s(fd, "password"));
+  if (!result.ok) {
+    redirect(`/login?error=${encodeURIComponent(result.reason === "locked" ? `Too many failed attempts. Try again in ${LOCKOUT_WINDOW_MINUTES} minutes or ask an admin to reset your password.` : "Invalid email or password")}`);
+  }
+  const user = result.user;
   const { token, expiresAt } = await createSession(db, user.id);
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -53,7 +56,11 @@ export async function logoutAction() {
 // CRM
 // ---------------------------------------------------------------------------
 export async function createLeadAction(fd: FormData) {
-  await run("/leads/new", (ctx) => crm.createLead(ctx, formObject(fd)), { success: "Lead created", next: (id) => `/opportunities/${id}` });
+  const another = s(fd, "then") === "another";
+  await run("/leads/new", (ctx) => crm.createLead(ctx, formObject(fd)), {
+    success: another ? "Lead created — add the next one" : "Lead created",
+    next: (id) => (another ? "/leads/new" : `/opportunities/${id}`),
+  });
 }
 
 export async function createCompanyAction(fd: FormData) {
@@ -277,6 +284,26 @@ export async function addEffortAction(fd: FormData) {
   await run(`/deployments/${deploymentId}`, (ctx) => deployments.addEffortEntry(ctx, deploymentId, formObject(fd)), { success: "Effort logged" });
 }
 
+export async function updateEffortAction(fd: FormData) {
+  const deploymentId = s(fd, "deployment_id");
+  await run(`/deployments/${deploymentId}`, (ctx) => deployments.updateEffortEntry(ctx, s(fd, "id"), formObject(fd)), { success: "Effort entry corrected" });
+}
+
+export async function deleteEffortAction(fd: FormData) {
+  const deploymentId = s(fd, "deployment_id");
+  await run(`/deployments/${deploymentId}`, (ctx) => deployments.deleteEffortEntry(ctx, s(fd, "id")), { success: "Effort entry deleted" });
+}
+
+export async function updateKpiAction(fd: FormData) {
+  const deploymentId = s(fd, "deployment_id");
+  await run(`/deployments/${deploymentId}`, (ctx) => deployments.updateKpiMeasurement(ctx, s(fd, "id"), formObject(fd)), { success: "Measurement corrected" });
+}
+
+export async function deleteKpiAction(fd: FormData) {
+  const deploymentId = s(fd, "deployment_id");
+  await run(`/deployments/${deploymentId}`, (ctx) => deployments.deleteKpiMeasurement(ctx, s(fd, "id")), { success: "Measurement deleted" });
+}
+
 export async function addKpiAction(fd: FormData) {
   const deploymentId = s(fd, "deployment_id");
   await run(`/deployments/${deploymentId}`, (ctx) => deployments.addKpiMeasurement(ctx, deploymentId, formObject(fd)), { success: "Measurement saved" });
@@ -285,6 +312,17 @@ export async function addKpiAction(fd: FormData) {
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+export async function changeOwnPasswordAction(fd: FormData) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  await run("/account", (ctx) => admin.changeOwnPassword(ctx, formObject(fd), token ? hashSessionToken(token) : undefined), {
+    success: "Password changed. Other devices were signed out.",
+  });
+}
+
+export async function updateOwnProfileAction(fd: FormData) {
+  await run("/account", (ctx) => admin.updateOwnProfile(ctx, formObject(fd)), { success: "Profile updated" });
+}
+
 export async function createUserAction(fd: FormData) {
   await run("/settings", (ctx) => admin.createUser(ctx, formObject(fd)), { success: "User created" });
 }

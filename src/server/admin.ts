@@ -1,5 +1,5 @@
 import { requireCap } from "@/lib/auth/user";
-import { hashPassword, MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "@/lib/auth/password";
 import { ROLES } from "@/lib/auth/roles";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import { bool, oneOf, optEmail, optStr, reqNum, reqStr } from "@/lib/validate";
@@ -52,7 +52,33 @@ export async function resetPassword(ctx: Ctx, id: string, password: string) {
   await ctx.db.transaction(async (tx) => {
     await tx.query("update app_users set password_hash = $2 where id = $1", [id, hashPassword(password)]);
     await tx.query("delete from user_sessions where user_id = $1", [id]);
+    // An admin reset also lifts any sign-in lockout for that user.
+    await tx.query("insert into login_attempts(email, succeeded) select lower(email), true from app_users where id = $1", [id]);
     await logAudit(tx, ctx.user, "app_user", id, "password_reset", null, null);
+  });
+}
+
+/** Any signed-in user changes their own password; other sessions of that user are signed out. */
+export async function changeOwnPassword(ctx: Ctx, input: Record<string, unknown>, keepSessionTokenHash?: string) {
+  const current = String(input.current_password ?? "");
+  const next = String(input.new_password ?? "");
+  if (next !== String(input.confirm_password ?? "")) throw new ValidationError("The new passwords do not match");
+  if (next.length < MIN_PASSWORD_LENGTH) throw new ValidationError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  if (next === current) throw new ValidationError("Choose a password different from the current one");
+  const [row] = await ctx.db.query<{ password_hash: string | null }>("select password_hash from app_users where id = $1", [ctx.user.id]);
+  if (!verifyPassword(current, row?.password_hash)) throw new ValidationError("Current password is incorrect");
+  await ctx.db.transaction(async (tx) => {
+    await tx.query("update app_users set password_hash = $2 where id = $1", [ctx.user.id, hashPassword(next)]);
+    await tx.query("delete from user_sessions where user_id = $1 and token_hash is distinct from $2", [ctx.user.id, keepSessionTokenHash ?? null]);
+    await logAudit(tx, ctx.user, "app_user", ctx.user.id, "password_changed_by_self", null, null);
+  });
+}
+
+export async function updateOwnProfile(ctx: Ctx, input: Record<string, unknown>) {
+  const name = reqStr(input.full_name, "Full name", 200);
+  await ctx.db.transaction(async (tx) => {
+    await tx.query("update app_users set full_name = $2 where id = $1", [ctx.user.id, name]);
+    await logAudit(tx, ctx.user, "app_user", ctx.user.id, "profile_update", { full_name: ctx.user.fullName }, { full_name: name });
   });
 }
 

@@ -8,7 +8,7 @@ export interface AnalyticsData {
   history: { opportunity_id: string; to_stage: Stage; changed_at: Date }[];
   fitCalls: { opportunity_id: string; completed_at: Date | null; outcome: string | null; audit_recommended: boolean | null }[];
   audits: { id: string; opportunity_id: string; status: string; price_cents: number; currency: string; paid_at: Date | null; presentation_at: Date | null }[];
-  proposals: { id: string; opportunity_id: string; proposal_type: string; status: string; amount_cents: number; currency: string; decision_at: Date | null }[];
+  proposals: { id: string; opportunity_id: string; proposal_type: string; status: string; amount_cents: number; audit_credit_cents?: number; currency: string; decision_at: Date | null }[];
   deployments: { id: string; proposal_id: string; reusable_components: number; total_components: number }[];
   effort: { deployment_id: string; work_date: string; hours: number; direct_cost_cents: number }[];
   retainers: { id: string; proposal_id: string; mrr_cents: number; currency: string; status: string }[];
@@ -62,7 +62,9 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
   // Won implementation (pilot / deployment / SMB starter)
   const wonImpl = data.proposals.filter((p) => p.status === "ACCEPTED" && p.proposal_type !== "RETAINER" && inP(p.decision_at));
   const wonImplBase = wonImpl.filter((p) => p.currency === base);
-  const wonRevenue = wonImplBase.reduce((s, p) => s + p.amount_cents, 0);
+  // Implementation revenue is the net price after any audit credit (the audit fee is already counted as audit revenue).
+  const net = (p: { amount_cents: number; audit_credit_cents?: number }) => p.amount_cents - (p.audit_credit_cents ?? 0);
+  const wonRevenue = wonImplBase.reduce((s, p) => s + net(p), 0);
 
   // Win rate from stage history
   const wonOpps = uniq(data.history.filter((h) => (h.to_stage === "WON_DEPLOYMENT" || h.to_stage === "WON_RETAINER") && inP(h.changed_at)).map((h) => h.opportunity_id));
@@ -88,7 +90,7 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
   }
   const periodEffort = data.effort.filter((e) => inP(e.work_date));
   const deliveryHours = periodEffort.reduce((s, e) => s + Number(e.hours), 0);
-  const cohortRevenue = cohort.reduce((s, d) => s + (proposalById.get(d.proposal_id)?.amount_cents ?? 0), 0);
+  const cohortRevenue = cohort.reduce((s, d) => { const pr = proposalById.get(d.proposal_id); return s + (pr ? net(pr) : 0); }, 0);
   const cohortCost = cohort.reduce((s, d) => {
     const e = effortByDep.get(d.id) ?? { hours: 0, direct: 0 };
     return s + deliveryCostCents(e.hours, opts.internalHourlyCostCents, e.direct);
@@ -102,7 +104,8 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
     const benefit = compareKpis(data.kpis.filter((k) => k.deployment_id === d.id)).reduce((s, c) => s + (c.latestResult?.benefit_monthly_cents ?? 0), 0);
     if (benefit > 0) {
       roiBenefit += benefit * 12;
-      roiRevenue += proposalById.get(d.proposal_id)?.amount_cents ?? 0;
+      const pr = proposalById.get(d.proposal_id);
+      roiRevenue += pr ? net(pr) : 0;
       roiRecords.push(d.id);
     }
   }
@@ -148,7 +151,7 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
       const r = row(p.opportunity_id);
       if (r) {
         r.won++;
-        r.wonRevenueCents += p.amount_cents;
+        r.wonRevenueCents += net(p);
       }
     }
     return [...rows.values()].sort((a, b) => b.leads - a.leads || b.wonRevenueCents - a.wonRevenueCents);
