@@ -2,7 +2,7 @@
 
 Internal operating system for RH Digital Agency: lead → fit call → paid audit → process mapping → scoring → ROI → proposal → deployment → measured KPIs.
 
-Live: https://rh-agentic-operations.vercel.app (Vercel + Supabase Postgres). Status and open items: `PROJECT_STATE.md`.
+Live: https://rh-agentic-operations.vercel.app (Vercel + Supabase Postgres). Repo: https://github.com/RHdigitalAgency/rh-agentic-operations. Status and open items: `PROJECT_STATE.md`.
 
 ## Run it locally (v0.1)
 
