@@ -3,9 +3,12 @@
 ## Environments
 | Env | Database | Notes |
 |---|---|---|
-| Local | PGlite in `./.data/pglite` (`DATABASE_URL` empty) | Demo seed allowed |
-| Staging | Supabase project #1 (`DATABASE_URL`) | No demo seed; test ingestion secret |
-| Production | Supabase project #2 (`DATABASE_URL`) | Separate secrets; `NODE_ENV=production` refuses seeding |
+| Local | PGlite in `./.data/pglite` (`DATABASE_URL` empty) | `npm run db:reset` for demo data |
+| Vercel Preview | Throwaway in-memory Postgres per instance, auto-seeded with demo data | No `DATABASE_URL` for Preview, so previews can never reach production. Sign in with the demo users and `SEED_DEMO_PASSWORD` (Preview env). Data resets on cold start (~10 s first request). Protected by Vercel login. |
+| Production | Supabase `rh-agentic-ops-staging` (the name is a historical label; this is production) | `DATABASE_URL` is Production-only. The app refuses to start in production without it. |
+| Staging (later) | Separate Supabase project | Add when real client data makes a pre-production copy worthwhile |
+
+Vercel env var targets: `DATABASE_URL`, `APP_BASE_CURRENCY`, `INSTAGRAM_INGESTION_SHARED_SECRET` → Production; `SEED_DEMO_PASSWORD`, `APP_BASE_CURRENCY`, a separate preview `INSTAGRAM_INGESTION_SHARED_SECRET` → Preview. Never give `DATABASE_URL` a Preview target.
 
 ## Deploy (Vercel or any Node host)
 1. Create the Supabase project. Connect as a dedicated app role, not `postgres`: create `rh_app` (login, `usage, create on schema public`, plus `create on database` if you run the real-Postgres tests). Set its password from a SCRAM hash generated on a trusted machine so the plaintext never leaves it. `DATABASE_URL` = **transaction pooler** (port 6543, user `rh_app.<project-ref>`). The driver uses `prepare: false`, so the pooler works. Tables owned by `rh_app` get no `anon`/`authenticated` grants, so Supabase's Data API cannot read them.

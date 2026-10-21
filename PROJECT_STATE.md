@@ -8,12 +8,13 @@ Date: 2026-10-20
 - PostgreSQL schema as SQL migrations (`database/migrations/`), deterministic reference data, local demo seed.
 - Service layer (`src/server/`) holding all business rules and data-level RBAC. Pages, server actions and API routes are thin wrappers.
 - Pure, unit-tested domain logic (`src/domain/`): pipeline rules, scoring, ROI, KPI comparison, analytics, money.
-- 64 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
+- 68 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
 
 ## Hosting
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
-- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0002 are applied.
+- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0002 are applied.
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
+- Vercel previews run on an isolated in-memory demo database (no production access); verified 2026-10-20.
 - Runbook: `docs/11_DEPLOYMENT_AND_RECOVERY.md`.
 
 ## External dependencies
@@ -41,7 +42,7 @@ TASK-001 → TASK-024 done (see `tasks/BACKLOG.md`). Open: TASK-025 Stripe webho
 1. When the Instagram automation is ready: share the secret privately and point it at the README contract.
 2. Put the code in GitHub (private repo) and connect it to Vercel for automatic deploys.
 3. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
-4. Before real client data: decide the production/staging split (see `docs/11_DEPLOYMENT_AND_RECOVERY.md`) and enable Supabase backups.
+4. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
 5. Add team members in Settings when they start using it.
 
 ## Validation clock
