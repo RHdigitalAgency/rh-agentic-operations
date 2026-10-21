@@ -14,7 +14,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Search" title={`Search: “${q}”`} subtitle={q.trim().length < 2 ? "Type at least 2 characters" : `${total} result(s) within your access`} />
-      {total === 0 ? <Empty>No matches.</Empty> : (
+      {total === 0 ? <Empty>No matches. Try part of a company name, a contact, an email or an Instagram handle.</Empty> : (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Companies">
             <ul className="space-y-1 text-sm">{r.companies.map((c) => <li key={c.id}><Link href={`/companies/${c.id}`}>{c.name}</Link></li>)}</ul>

@@ -1,30 +1,17 @@
 import Link from "next/link";
 import { load, requireCtx } from "@/lib/auth/current";
+import { can } from "@/lib/auth/user";
 import { readParams, type SearchParams } from "@/lib/params";
 import { followUpQueue, type OpportunityRow } from "@/server/crm";
-import { Card, Empty, fmtDateTime, PageHeader, StageBadge } from "@/components/ui";
+import { FollowUpList } from "@/components/FollowUpList";
+import { Card, Empty, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Follow-ups" };
 
-function Queue({ title, rows, tone }: { title: string; rows: OpportunityRow[]; tone?: string }) {
+function Queue({ title, rows, tone, back, now, canAct, empty }: { title: string; rows: OpportunityRow[]; tone?: string; back: string; now: number; canAct: boolean; empty: string }) {
   return (
     <Card title={<span className={tone}>{title} ({rows.length})</span>}>
-      {rows.length === 0 ? <Empty>Nothing here.</Empty> : (
-        <table className="table">
-          <thead><tr><th>Company</th><th>Stage</th><th>Next action</th><th>Due</th><th>Owner</th></tr></thead>
-          <tbody>
-            {rows.map((o) => (
-              <tr key={o.id}>
-                <td><Link href={`/opportunities/${o.id}`}>{o.company_name}</Link></td>
-                <td><StageBadge stage={o.stage} /></td>
-                <td>{o.next_action ?? <span className="text-amber-700">Define next action</span>}</td>
-                <td className="whitespace-nowrap">{fmtDateTime(o.next_action_at)}</td>
-                <td>{o.owner_name ?? "Unassigned"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {rows.length === 0 ? <Empty>{empty}</Empty> : <FollowUpList rows={rows} back={back} now={now} canAct={canAct} />}
     </Card>
   );
 }
@@ -33,18 +20,22 @@ export default async function FollowUpsPage({ searchParams }: { searchParams: Se
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
   const mine = p.mine === "1";
+  const now = new Date().getTime();
   const q = await load(followUpQueue(ctx, { ownerId: mine ? ctx.user.id : undefined }));
+  const back = mine ? "/followups?mine=1" : "/followups";
+  const canAct = can(ctx.user, "crm.write") && can(ctx.user, "activity.write");
+  const shared = { back, now, canAct };
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Sales"
         title="Follow-up queue"
-        subtitle="Open opportunities by next-action due date"
+        subtitle="Open opportunities by next-action due date. Mark a follow-up done to log it and set the next step, or snooze it."
         actions={<Link className="btn hover:no-underline" href={mine ? "/followups" : "/followups?mine=1"}>{mine ? "Show all visible" : "Only mine"}</Link>}
       />
-      <Queue title="Overdue" rows={q.overdue} tone="text-red-700" />
-      <Queue title="Due today" rows={q.today} />
-      <Queue title="Next 7 days" rows={q.next7} />
-      <Queue title="Missing next action" rows={q.missing} tone="text-amber-700" />
+      <Queue title="Overdue" rows={q.overdue} tone="text-red-700" empty="Nothing overdue — nice work." {...shared} />
+      <Queue title="Due today" rows={q.today} empty="Nothing else due today." {...shared} />
+      <Queue title="Next 7 days" rows={q.next7} empty="Nothing scheduled for the coming week." {...shared} />
+      <Queue title="Missing next action" rows={q.missing} tone="text-amber-700" empty="Every open deal has a next step." {...shared} />
     </div>
   );
 }

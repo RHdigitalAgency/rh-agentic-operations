@@ -204,3 +204,27 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
 }
 
 export type Dashboard = ReturnType<typeof computeDashboard>;
+
+/**
+ * Revenue per calendar month (UTC) for the last `months` months, base currency only: paid audit fees by payment date
+ * and won implementation work (net of audit credit) by decision date. Retainers are excluded (see MRR).
+ */
+export function monthlyRevenue(data: Pick<AnalyticsData, "audits" | "proposals">, opts: { baseCurrency: string; months?: number; now?: Date }) {
+  const n = opts.months ?? 6;
+  const now = opts.now ?? new Date();
+  const buckets = Array.from({ length: n }, (_, i) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (n - 1 - i), 1));
+    return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), auditCents: 0, implementationCents: 0 };
+  });
+  const byKey = new Map(buckets.map((b) => [b.key, b]));
+  const month = (d: Date | null) => (d ? byKey.get(new Date(d).toISOString().slice(0, 7)) : undefined);
+  for (const a of data.audits) {
+    const b = a.status !== "CANCELLED" && a.currency === opts.baseCurrency ? month(a.paid_at) : undefined;
+    if (b) b.auditCents += a.price_cents;
+  }
+  for (const p of data.proposals) {
+    const b = p.status === "ACCEPTED" && p.proposal_type !== "RETAINER" && p.currency === opts.baseCurrency ? month(p.decision_at) : undefined;
+    if (b) b.implementationCents += p.amount_cents - (p.audit_credit_cents ?? 0);
+  }
+  return buckets;
+}

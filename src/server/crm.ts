@@ -662,6 +662,50 @@ export async function followUpQueue(ctx: Ctx, f: { ownerId?: string } = {}) {
   return { overdue, today, next7, missing };
 }
 
+export const SNOOZE_DAYS = [1, 7] as const;
+
+/** Pushes the next-action deadline out by N days, counted from now when it is already overdue. */
+export async function snoozeFollowUp(ctx: Ctx, id: string, days: number) {
+  requireCap(ctx.user, "crm.write");
+  if (!SNOOZE_DAYS.includes(days as (typeof SNOOZE_DAYS)[number])) throw new ValidationError("Snooze must be 1 or 7 days");
+  const opp = await getOpportunity(ctx, id);
+  if (!isOpen(opp.stage)) throw new ValidationError("Only open opportunities have follow-ups");
+  if (!opp.next_action) throw new ValidationError("Set a next action before snoozing");
+  const base = opp.next_action_at && opp.next_action_at > new Date() ? opp.next_action_at : new Date();
+  const until = new Date(base.getTime() + days * 86400000);
+  await ctx.db.transaction(async (tx) => {
+    await tx.query("update opportunities set next_action_at = $2, updated_at = now() where id = $1", [id, until]);
+    await logAudit(tx, ctx.user, "opportunity", id, "snooze", { next_action_at: opp.next_action_at }, { next_action_at: until });
+  });
+  return until;
+}
+
+/**
+ * Marks the current follow-up as done: records what happened as an activity and sets the next step in one go,
+ * so an open opportunity never loses its next action.
+ */
+export async function completeFollowUp(ctx: Ctx, id: string, input: Record<string, unknown>) {
+  requireCap(ctx.user, "crm.write");
+  requireCap(ctx.user, "activity.write");
+  const opp = await getOpportunity(ctx, id);
+  if (!isOpen(opp.stage)) throw new ValidationError("Only open opportunities have follow-ups");
+  const type = oneOf(input.activity_type || "TASK", ACTIVITY_TYPES, "activity type");
+  const notes = optStr(input.notes, 4000);
+  const nextAction = reqStr(input.next_action, "Next action", 300);
+  const nextAt = optDate(input.next_action_at, "Next action date");
+  if (!nextAt) throw new ValidationError("Next action date is required");
+  const done = opp.next_action ? `Done: ${opp.next_action}` : "Follow-up done";
+  await ctx.db.transaction(async (tx) => {
+    await tx.query(
+      "insert into activities(opportunity_id, company_id, owner_user_id, activity_type, notes, occurred_at) values ($1,$2,$3,$4,$5,now())",
+      [id, opp.company_id, ctx.user.id, type, notes ? `${done}\n${notes}` : done],
+    );
+    await tx.query("update opportunities set next_action = $2, next_action_at = $3, updated_at = now() where id = $1", [id, nextAction, nextAt]);
+    await logAudit(tx, ctx.user, "opportunity", id, "follow_up_done",
+      { next_action: opp.next_action, next_action_at: opp.next_action_at }, { next_action: nextAction, next_action_at: nextAt });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------

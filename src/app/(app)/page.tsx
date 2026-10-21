@@ -2,15 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   AlarmClock, BadgeDollarSign, CalendarClock, CalendarDays, ChartNoAxesCombined, Clock, Coins, Download, Gauge, Handshake, Hourglass,
-  Layers, Percent, PhoneCall, Recycle, Target, TrendingUp, UserPlus, Wallet,
+  BarChart3, CircleCheck, Layers, ListTodo, Percent, PhoneCall, Recycle, Target, TrendingUp, UserPlus, Wallet,
 } from "lucide-react";
 import { requireCtx } from "@/lib/auth/current";
 import { can } from "@/lib/auth/user";
 import { readParams, type SearchParams } from "@/lib/params";
 import { getDashboard } from "@/server/analytics";
-import { listActiveUsers, listReference } from "@/server/crm";
+import { followUpQueue, listActiveUsers, listReference } from "@/server/crm";
 import { STAGE_LABELS } from "@/domain/pipeline";
 import { formatCents } from "@/domain/money";
+import { monthlyRevenue } from "@/domain/analytics";
+import { FollowUpList } from "@/components/FollowUpList";
 import { Card, Empty, fmtNum, fmtPct, PageHeader, Stat } from "@/components/ui";
 
 export const metadata = { title: "Dashboard" };
@@ -34,7 +36,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   if (!can(ctx.user, "dashboard.read")) redirect(can(ctx.user, "referral.submit") ? "/referrals" : "/pipeline");
   const p = await readParams(searchParams);
   const filters = { from: p.from, to: p.to, vertical: p.vertical, source: p.source, ownerId: p.owner };
-  const [dash, ref, users] = await Promise.all([getDashboard(ctx, filters), listReference(ctx.db), listActiveUsers(ctx)]);
+  const [dash, ref, users, myQueue] = await Promise.all([
+    getDashboard(ctx, filters), listReference(ctx.db), listActiveUsers(ctx),
+    can(ctx.user, "crm.read") ? followUpQueue(ctx, { ownerId: ctx.user.id }) : null,
+  ]);
   const m = dash.metrics;
   const cur = dash.baseCurrency;
   const money = (v: number | null) => (v === null ? "—" : formatCents(v, cur));
@@ -61,6 +66,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     return `/?${q}`;
   };
   const displayName = ctx.user.fullName?.trim();
+  const myDue = myQueue ? [...myQueue.overdue, ...myQueue.today] : [];
+  const canAct = can(ctx.user, "crm.write") && can(ctx.user, "activity.write");
+  const trend = monthlyRevenue(dash.data, { baseCurrency: cur, months: 6, now });
+  const trendMax = Math.max(1, ...trend.map((t) => t.auditCents + t.implementationCents));
 
   return (
     <div className="space-y-8">
@@ -78,6 +87,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
           </div>
         ) : null}
       />
+
+      {myQueue ? (
+        <Card title={`Your follow-ups today (${myDue.length})`} icon={ListTodo} actions={<Link href="/followups?mine=1" className="text-sm">All my follow-ups →</Link>}>
+          {myDue.length === 0 ? (
+            <p className="flex items-center gap-2 text-sm text-emerald-700"><CircleCheck className="size-4" aria-hidden /> You&apos;re all caught up — nothing overdue or due today.</p>
+          ) : (
+            <>
+              <FollowUpList rows={myDue.slice(0, 5)} back="/" now={now.getTime()} canAct={canAct} showOwner={false} />
+              {myDue.length > 5 ? <p className="mt-3 text-sm"><Link href="/followups?mine=1">+ {myDue.length - 5} more</Link></p> : null}
+            </>
+          )}
+        </Card>
+      ) : null}
 
       <form className="card flex flex-wrap items-end gap-3 p-4" method="get">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -182,6 +204,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
           </div>
         </Card>
       </div>
+
+      <Card title="Revenue by month" icon={BarChart3} actions={
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-rh" />Implementation</span>
+          <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-cyan" />Audits</span>
+        </div>
+      }>
+        <div className="flex h-48 items-end gap-2 sm:gap-4" role="img" aria-label={`Revenue for the last 6 months: ${trend.map((t) => `${t.label} ${money(t.auditCents + t.implementationCents)}`).join(", ")}`}>
+          {trend.map((t) => {
+            const total = t.auditCents + t.implementationCents;
+            return (
+              <div key={t.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                <span className="text-[11px] font-semibold tabular-nums text-navy">{total ? formatCents(total, cur).replace(/\.00$/, "") : ""}</span>
+                <div className="flex w-full max-w-16 flex-col justify-end overflow-hidden rounded-t-md bg-mist" style={{ height: `${Math.max(2, (total / trendMax) * 100)}%` }} title={`${t.label}: implementation ${money(t.implementationCents)}, audits ${money(t.auditCents)}`}>
+                  <div className="bg-cyan" style={{ height: `${total ? (t.auditCents / total) * 100 : 0}%` }} />
+                  <div className="bg-rh" style={{ height: `${total ? (t.implementationCents / total) * 100 : 0}%` }} />
+                </div>
+                <span className="text-xs text-slate-500">{t.label}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">Last 6 months, not affected by the period filter. Paid audit fees by payment date; won pilots and deployments (net of audit credit) by acceptance date. Retainers count in MRR.</p>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {([["By source", dash.bySource], ["By vertical", dash.byVertical], ["By rep", dash.byRep]] as const).map(([title, rows]) => {

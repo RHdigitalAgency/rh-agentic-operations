@@ -14,7 +14,7 @@ export default async function ReferralsPage() {
     <div className="max-w-4xl space-y-4">
       <PageHeader eyebrow="Partner" title="My referrals" subtitle="Opportunities attributed to you and their current status" />
       <Card title="Attributed opportunities">
-        {rows.length === 0 ? <Empty>No referrals yet.</Empty> : (
+        {rows.length === 0 ? <Empty>No referrals yet. Submit your first one with the form — you can follow its progress here.</Empty> : (
           <table className="table">
             <thead><tr><th>Company</th><th>Status</th><th>Referred</th><th>Last change</th></tr></thead>
             <tbody>{rows.map((r) => (

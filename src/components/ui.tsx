@@ -83,6 +83,18 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="rounded-lg border border-dashed border-frost bg-mist/50 px-4 py-6 text-center text-sm text-slate-500">{children}</div>;
 }
 
+/** Larger empty state for list pages: what the page is for and the first thing to do. */
+export function EmptyState({ icon: Icon, title, text, action }: { icon: LucideIcon; title: string; text?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-frost bg-white px-6 py-12 text-center">
+      <span className="flex size-12 items-center justify-center rounded-xl bg-mist text-rh"><Icon className="size-6" aria-hidden /></span>
+      <h2 className="mt-4">{title}</h2>
+      {text ? <p className="muted mt-1 max-w-md">{text}</p> : null}
+      {action ? <div className="mt-5 flex flex-wrap justify-center gap-2">{action}</div> : null}
+    </div>
+  );
+}
+
 export function Field({ label, children, hint, className = "" }: { label: string; children: ReactNode; hint?: ReactNode; className?: string }) {
   return (
     <label className={`block ${className}`}>
