@@ -7,7 +7,7 @@ import {
 } from "@/app/actions";
 import { ACTIVITY_TYPES, getOpportunityDetail, listActiveUsers, listReference } from "@/server/crm";
 import { allowedTargets, STAGE_LABELS, STAGES, type Stage } from "@/domain/pipeline";
-import { Activity, BadgeDollarSign, ClipboardList, FileSignature, GitBranch, History, Megaphone, PhoneCall } from "lucide-react";
+import { Activity, ArrowRight, BadgeDollarSign, ClipboardList, FileSignature, GitBranch, History, Megaphone, PhoneCall } from "lucide-react";
 import { Badge, Card, centsInput, Empty, Field, fmtDate, fmtDateTime, Hidden, KV, Money, PageHeader, StageBadge, StatusBadge, Stepper, toLocalInput, type Step } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 
@@ -30,6 +30,28 @@ function dealSteps(stage: Stage, history: { to_stage: string }[]): Step[] {
     const cur = STAGES.indexOf(stage);
     return { label, state: i < cur ? "done" : code === stage ? "current" : "todo" };
   });
+}
+
+/** Plain-language guidance for the current stage, so the team always knows the next move. */
+function nextStep(
+  stage: Stage,
+  ctx: { fitCallOpen: boolean; auditId: string | null; proposalId: string | null; nurtureAt: Date | null },
+): { text: string; href?: string; cta?: string } {
+  const audit = ctx.auditId ? `/audits/${ctx.auditId}` : undefined;
+  switch (stage) {
+    case "NEW_LEAD": return { text: "Reach out to the lead (call, DM or email), log it under Activities, then move the deal to Contacted." };
+    case "CONTACTED": return { text: "Schedule the free 15-minute fit call in the Fit calls section." };
+    case "FIT_CALL_BOOKED": return { text: ctx.fitCallOpen ? "After the fit call, record the outcome. “Qualified + audit recommended” moves the deal forward." : "Schedule the fit call in the Fit calls section." };
+    case "FIT_QUALIFIED": return { text: "Offer the paid audit: set the price and auditor in the Paid audit section." };
+    case "AUDIT_OFFERED": return { text: "Collect the audit payment: Stripe link for US clients, or confirm a manual payment.", href: audit, cta: "Open audit" };
+    case "AUDIT_PAID": return { text: "Payment received. Start discovery in the audit workspace.", href: audit, cta: "Open audit" };
+    case "AUDIT_IN_PROGRESS": return { text: "Finish the audit: map and score processes, add an ROI scenario, pick the recommended pilot, then mark it presented.", href: audit, cta: "Open audit" };
+    case "AUDIT_PRESENTED": return { text: "Create the pilot proposal from the recommended pilot in the audit workspace, then send it.", href: audit, cta: "Open audit" };
+    case "PROPOSAL_SENT": return { text: "Follow up with the client and record their decision on the proposal.", href: ctx.proposalId ? `/proposals/${ctx.proposalId}` : undefined, cta: "Open proposal" };
+    case "WON_DEPLOYMENT": return { text: "Won. Delivery is tracked on the deployment (agent roles, QA, effort, results). Offer an optimization retainer after launch.", href: ctx.proposalId ? `/proposals/${ctx.proposalId}` : undefined, cta: "Open proposal" };
+    case "WON_RETAINER": return { text: "Retainer active. Keep measuring results and look for the next responsibility to automate." };
+    case "LOST_NURTURE": return { text: ctx.nurtureAt ? `In nurture. Reach out again on ${fmtDate(ctx.nurtureAt)}, then reopen the deal.` : "Closed as lost. Reopen it if the situation changes." };
+  }
 }
 
 export default async function OpportunityPage({ params }: { params: Promise<{ id: string }> }) {
@@ -55,6 +77,21 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
       />
 
       <Stepper steps={dealSteps(opp.stage, history)} />
+      {(() => {
+        const step = nextStep(opp.stage, {
+          fitCallOpen: fitCalls.some((f) => !f.completed_at),
+          auditId: audits.find((x) => x.status !== "CANCELLED")?.id ?? null,
+          proposalId: proposals.find((x) => x.status !== "WITHDRAWN")?.id ?? null,
+          nurtureAt: opp.nurture_at,
+        });
+        return (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-cta/25 bg-cta/5 px-4 py-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-cta text-white"><ArrowRight className="size-4" aria-hidden /></span>
+            <p className="min-w-0 flex-1 text-sm"><b className="text-navy">Next step: </b>{step.text}</p>
+            {step.href ? <Link href={step.href} className="btn btn-cta">{step.cta}</Link> : null}
+          </div>
+        );
+      })()}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card icon={Megaphone} title="Attribution" className="lg:col-span-1">

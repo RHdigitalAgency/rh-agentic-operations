@@ -15,6 +15,8 @@ export default defineConfig({
     setupFiles: ["tests/setup.ts"],
     // Real-Postgres mode (TEST_DATABASE_URL): one file at a time to stay within pooler limits.
     fileParallelism: !process.env.TEST_DATABASE_URL,
+    // Each integration file boots its own embedded Postgres (WASM); too many at once crashes workers on Windows.
+    maxWorkers: 4,
     // Real Postgres adds a network round trip per query (the demo seed runs hundreds).
     testTimeout: process.env.TEST_DATABASE_URL ? 600000 : 30000,
     hookTimeout: 60000,

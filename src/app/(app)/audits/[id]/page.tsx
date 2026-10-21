@@ -8,9 +8,10 @@ import {
 import { classificationLabel, getAuditWorkspace } from "@/server/audits";
 import { listActiveUsers } from "@/server/crm";
 import { stripeConfigured } from "@/server/stripe";
+import { auditCreditEligibility } from "@/server/proposals";
 import { formatCents } from "@/domain/money";
 import { Badge, Card, Empty, Field, fmtDate, fmtDateTime, fmtNum, fmtPct, Hidden, KV, Money, PageHeader, Stat, StatusBadge, Stepper, type Step } from "@/components/ui";
-import { Bot, Calculator, Check, CreditCard, Search, Workflow } from "lucide-react";
+import { Bot, Calculator, Check, CreditCard, FileText, Search, Workflow } from "lucide-react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { RoiForm } from "../RoiForm";
 
@@ -41,6 +42,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
   const pilot = ws.agenticOpportunities.find((a) => a.recommended_for_pilot);
   const cur = audit.currency;
   const stripeOn = stripeConfigured();
+  const credit = await auditCreditEligibility(ctx.db, audit.id);
 
   return (
     <div className="space-y-6">
@@ -53,6 +55,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
           {audit.regulated ? <> · <Badge tone="amber">regulated vertical — administrative/operational scope only</Badge></> : null}
         </>}
         actions={<>
+          <a href={`/print/audits/${id}`} target="_blank" rel="noreferrer" className="btn"><FileText className="size-4" aria-hidden /> Client report</a>
           {audit.status === "PAID" && canWrite ? <form action={startAuditAction}><Hidden name="id" value={id} /><SubmitButton>Start discovery</SubmitButton></form> : null}
           {audit.status === "IN_PROGRESS" && canWrite ? (
             <form action={presentAuditAction} className="flex items-end gap-2">
@@ -210,10 +213,17 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
                       ) : null}
                       {proposal ? <Link href={`/proposals/${proposal.id}`}>Proposal ({proposal.status.toLowerCase()}) →</Link> : null}
                       {a.recommended_for_pilot && !proposal && can(ctx.user, "proposal.write") && ["IN_PROGRESS", "PRESENTED"].includes(audit.status) ? (
-                        <form action={createProposalFromPilotAction} className="flex items-end gap-1">
+                        <form action={createProposalFromPilotAction} className="space-y-1.5">
                           <Hidden name="agentic_opportunity_id" value={a.id} /><Hidden name="_back" value={back} />
-                          <input className="input w-28" name="amount__money" placeholder={`Pilot ${cur}`} required />
-                          <SubmitButton>Create proposal</SubmitButton>
+                          <div className="flex items-end gap-1">
+                            <input className="input w-28" name="amount__money" placeholder={`Pilot ${cur}`} required />
+                            <SubmitButton>Create proposal</SubmitButton>
+                          </div>
+                          {credit.eligible ? (
+                            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                              <input type="checkbox" name="apply_audit_credit" defaultChecked /> Credit audit fee ({formatCents(credit.creditCents, cur)}, {credit.daysLeft} days left)
+                            </label>
+                          ) : null}
                         </form>
                       ) : null}
                     </td>

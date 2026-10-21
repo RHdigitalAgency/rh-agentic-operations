@@ -38,7 +38,7 @@ export async function loadAnalyticsData(ctx: Ctx, f: DashboardFilters): Promise<
     db.query<AnalyticsData["history"][number]>(`select opportunity_id, to_stage, changed_at from opportunity_stage_history where opportunity_id in (${universe})`, p),
     db.query<AnalyticsData["fitCalls"][number]>(`select opportunity_id, completed_at, outcome, audit_recommended from fit_calls where opportunity_id in (${universe})`, p),
     db.query<AnalyticsData["audits"][number]>(`select id, opportunity_id, status, price_cents, currency, paid_at, presentation_at from audits where opportunity_id in (${universe})`, p),
-    db.query<AnalyticsData["proposals"][number]>(`select id, opportunity_id, proposal_type, status, amount_cents, currency, decision_at from proposals where opportunity_id in (${universe})`, p),
+    db.query<AnalyticsData["proposals"][number]>(`select id, opportunity_id, proposal_type, status, amount_cents, audit_credit_cents, currency, decision_at from proposals where opportunity_id in (${universe})`, p),
     db.query<AnalyticsData["deployments"][number]>(
       `select d.id, d.proposal_id, d.reusable_components, d.total_components from deployments d join proposals pr on pr.id = d.proposal_id where pr.opportunity_id in (${universe})`,
       p,
