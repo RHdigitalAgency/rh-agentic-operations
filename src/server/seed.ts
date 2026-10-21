@@ -19,7 +19,7 @@ import {
  * the same business rules, then each step is back-dated to build a realistic 90-day history.
  */
 export const DEMO_USERS: [string, Role, string, string | null][] = [
-  ["admin@example.com", "ADMIN_MANAGER", "Renata Huamán", "HQ"],
+  ["admin@example.com", "ADMIN_MANAGER", "RH Admin", "HQ"],
   ["marco.sales@example.com", "SALES_REP", "Marco Salas", "Miami"],
   ["lucia.sales@example.com", "SALES_REP", "Lucía Prado", "Lima"],
   ["diego.delivery@example.com", "DELIVERY", "Diego Ortega", null],

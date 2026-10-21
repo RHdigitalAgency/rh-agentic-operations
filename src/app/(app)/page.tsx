@@ -60,13 +60,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     const q = new URLSearchParams(Object.entries({ vertical: p.vertical, source: p.source, owner: p.owner, from, to: iso(now) }).filter(([, v]) => v) as [string, string][]);
     return `/?${q}`;
   };
-  const firstName = (ctx.user.fullName ?? "").split(" ")[0];
+  const displayName = ctx.user.fullName?.trim();
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Executive dashboard"
-        title={firstName ? `Welcome back, ${firstName}` : "Performance overview"}
+        title={displayName ? `Welcome back, ${displayName}` : "Performance overview"}
         subtitle={<>{dash.period.from} → {dash.period.to} · amounts in {cur}{dash.excludedOtherCurrency ? ` · ${dash.excludedOtherCurrency} record(s) in other currencies excluded from sums` : ""}</>}
         actions={can(ctx.user, "export") ? (
           <div className="flex overflow-hidden rounded-lg border border-frost bg-white">
