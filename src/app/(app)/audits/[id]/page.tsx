@@ -170,7 +170,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         )}
         {canWrite ? (
           <details className="mt-3">
-            <summary className="cursor-pointer text-sm text-brand-700">+ Add process</summary>
+            <summary className="cursor-pointer text-sm text-rh">+ Add process</summary>
             <form action={addProcessAction} className="mt-2 grid gap-2 md:grid-cols-4">
               <Hidden name="audit_id" value={id} />
               <Field label="Process name"><input className="input" name="name" required /></Field>
@@ -256,7 +256,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
                     ]} />
                   </div>
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-sm text-brand-700">Assumptions & history ({versions.length} version{versions.length > 1 ? "s" : ""})</summary>
+                    <summary className="cursor-pointer text-sm text-rh">Assumptions & history ({versions.length} version{versions.length > 1 ? "s" : ""})</summary>
                     <ul className="mt-1 text-xs text-slate-600">
                       {versions.map((v) => <li key={v.id}>v{v.version} · {fmtDateTime(v.created_at)} · {formatCents(v.monthly_value_low_cents, cur)}–{formatCents(v.monthly_value_high_cents, cur)}/mo · <code>{JSON.stringify(v.assumptions)}</code></li>)}
                     </ul>
@@ -269,7 +269,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         )}
         {canWrite ? (
           <details className="mt-3">
-            <summary className="cursor-pointer text-sm text-brand-700">+ New ROI scenario</summary>
+            <summary className="cursor-pointer text-sm text-rh">+ New ROI scenario</summary>
             <div className="mt-2"><RoiForm auditId={id} processes={ws.processes} /></div>
           </details>
         ) : null}

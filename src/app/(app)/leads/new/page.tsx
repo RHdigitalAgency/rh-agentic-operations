@@ -5,23 +5,16 @@ import { createLeadAction } from "@/app/actions";
 import { listActiveUsers, listCompanies, listReference } from "@/server/crm";
 import { Card, Field, PageHeader, toLocalInput } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { zonedAt } from "@/lib/time";
 
 export const metadata = { title: "New lead" };
-
-/** Tomorrow at 09:00 server-local time: the default first-outreach deadline. */
-function tomorrowNine(now: Date) {
-  const d = new Date(now);
-  d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  return d;
-}
 
 export default async function NewLeadPage() {
   const ctx = await requireCtx();
   if (!can(ctx.user, "crm.write")) notFound();
   const [ref, users, companies] = await Promise.all([listReference(ctx.db), listActiveUsers(ctx), listCompanies(ctx)]);
   const isSales = ctx.user.role === "SALES_REP";
-  const due = toLocalInput(tomorrowNine(new Date()));
+  const due = toLocalInput(zonedAt(1, 9)); // default first-outreach deadline: tomorrow 09:00 business time
   return (
     <div className="max-w-3xl">
       <PageHeader eyebrow="Sales" title="New lead" subtitle="Only the essentials are needed. Instagram and website leads arrive automatically." />

@@ -1,4 +1,5 @@
 import { ValidationError } from "@/lib/errors";
+import { parseLocalDateTime, zonedDay } from "./time";
 
 /** Small coercion helpers for form / JSON input. Empty strings become null. */
 type In = unknown;
@@ -33,10 +34,13 @@ export function reqNum(v: In, field: string, opts: { min?: number; max?: number;
   return n;
 }
 
-/** Accepts ISO strings / datetime-local values / Date. Returns a Date or null. */
+/**
+ * Accepts ISO strings / Date / datetime-local values. Zone-less wall-clock values ("2026-10-22T09:00", what
+ * <input type="datetime-local"> submits) are business-zone time — never the server's UTC.
+ */
 export function optDate(v: In, field: string): Date | null {
   if (v === null || v === undefined || v === "") return null;
-  const d = v instanceof Date ? v : new Date(String(v));
+  const d = v instanceof Date ? v : parseLocalDateTime(String(v).trim()) ?? new Date(String(v));
   if (Number.isNaN(d.getTime())) throw new ValidationError(`${field} must be a valid date`);
   return d;
 }
@@ -86,7 +90,7 @@ export function optUrl(v: In, field = "URL"): string | null {
   }
 }
 
-/** Today's calendar date (YYYY-MM-DD) in the server's local time zone. */
+/** Today's calendar date (YYYY-MM-DD) in the business time zone. */
 export function todayLocal(): string {
-  return new Date().toLocaleDateString("en-CA");
+  return zonedDay();
 }

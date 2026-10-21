@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { AppError } from "@/lib/errors";
+import { toAppError } from "@/lib/errors";
 import { ingestLead, parseLeadEvent, rateLimit, verifyIngestionAuth } from "@/server/ingestion";
 import { jsonError } from "../../_lib";
 
@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
   if (!rateLimit(`ingest:${ip}`)) return jsonError(429, "RATE_LIMITED", "Too many requests");
 
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return jsonError(413, "TOO_LARGE", "Payload too large");
   const raw = await req.text();
-  if (raw.length > MAX_BODY_BYTES) return jsonError(413, "TOO_LARGE", "Payload too large");
+  if (Buffer.byteLength(raw) > MAX_BODY_BYTES) return jsonError(413, "TOO_LARGE", "Payload too large");
   if (!verifyIngestionAuth(raw, req.headers, secret)) return jsonError(401, "UNAUTHORIZED", "Missing or invalid x-rh-signature");
 
   let body: unknown;
@@ -40,7 +41,8 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ data: { opportunity_id: result.opportunityId, duplicate: result.duplicate } }, { status: result.duplicate ? 200 : 201 });
   } catch (e) {
-    if (e instanceof AppError) return jsonError(e.status, e.code, e.message);
+    const err = toAppError(e);
+    if (err) return jsonError(err.status, err.code, err.message);
     console.error("lead ingestion failed", e);
     return jsonError(500, "INTERNAL", "Unexpected error");
   }

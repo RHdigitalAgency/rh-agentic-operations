@@ -17,7 +17,7 @@ Production currently contains the **removable demo dataset** (added 2026-10-21 f
 ## Hosting
 - Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private). Connected to Vercel: push to `main` → production; other branches → preview.
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
-- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0004 are applied.
+- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0004 are applied. **0005 (integrity constraints) is on branch `hardening`: apply it with `npm run db:migrate` before merging** (the app would otherwise apply it on first start; applying first proves existing data satisfies the new constraints).
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
 - Vercel previews run on an isolated in-memory demo database (no production access). Each instance has its own demo data, so preview sessions can drop between pages — previews are for quick visual review; test flows locally.
 - UI: RH Digital Agency brand system (brand book in `assets/branding`, untracked), live since 2026-10-21.
@@ -39,7 +39,7 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 ## Known gaps / technical debt
 1. No Supabase Auth adapter (ADR-0003): no password-reset email or SSO. Admins set passwords in Settings.
 2. The ingestion rate limiter is in-memory per server instance. Add an edge limit (Vercel firewall) if the endpoint sees abuse.
-3. Period filters use UTC day boundaries. Dashboard sums are base-currency (USD) only, with no FX conversion.
+3. Dashboard sums are base-currency (USD) only, with no FX conversion. (Day boundaries now use the business time zone, `NEXT_PUBLIC_APP_TIMEZONE`, default America/Lima.)
 4. ~~Audit credit not modeled~~ — done: opt-in per proposal, only after the audit is paid, within 30 days, once per audit, never on retainers; revenue analytics use the net amount.
 5. CAC is not computed: there is no acquisition-spend data yet (per the PDR).
 6. ~~No UI to edit/delete effort or KPI rows~~ — done, owner or manager only, audit-logged.
@@ -64,6 +64,12 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 - Lists: sortable columns, search/filters, CSV export (companies, audits, proposals) on Companies, Audits, Proposals, Deployments.
 - Keyboard: N = new lead, / = search. Helpful empty states with the first action.
 - **Spanish UI toggle: deferred until the owner approves the final English version.**
+
+## Hardening pass (branch `hardening`, 2026-10-21)
+- Concurrency: every status transition (proposal send/accept/reject/withdraw, audit paid/start/present/cancel, deployment status, stage moves) locks its row and re-checks status inside the transaction; double submits get a clean "refresh and try again" instead of duplicate deployments/history. Stripe webhook claims the event id atomically. DB unique indexes back the "one active audit per opportunity / one audit credit per audit / one proposal per pilot" rules (migration 0005). Migrations run under an advisory lock.
+- Security: CSP + frame/sniff/referrer/permissions/HSTS headers; open-redirect fix on `_back`; async password hashing check (no event-loop blocking); sign-in attempts pruned; LIKE wildcards escaped; ingestion size pre-check and bounded rate-limiter memory.
+- Reliability: database errors mapped to user-facing errors (malformed id = not found, unique race = conflict) instead of 500s; Stripe checkout uses a stable idempotency key (no duplicate payable links) and a 15 s timeout.
+- Correctness: all wall-clock times (form deadlines, "due today", displayed times, dashboard periods) use the business time zone instead of the server's UTC; exports are no longer capped at the on-screen list limits; leads are not attached to contacts of archived companies.
 
 ## Next actions
 0. Remove the demo data from production (`npm run demo:remove`, see top) before real use.

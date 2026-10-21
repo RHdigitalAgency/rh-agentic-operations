@@ -45,11 +45,22 @@ export async function createAuditCheckout(ctx: Ctx, auditId: string): Promise<st
     success_url: `${appUrl()}/paid`,
     cancel_url: `${appUrl()}/paid?cancelled=1`,
   });
-  const res = await fetch(`${STRIPE_API}/checkout/sessions`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/x-www-form-urlencoded", "idempotency-key": `audit-${audit.id}-${Date.now()}` },
-    body: form,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${STRIPE_API}/checkout/sessions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${key}`,
+        "content-type": "application/x-www-form-urlencoded",
+        // Stable per audit/price/previous session: double clicks share one Checkout Session instead of creating two payable links.
+        "idempotency-key": `audit-${audit.id}-${audit.price_cents}-${audit.currency}-after-${audit.stripe_checkout_session_id ?? "none"}`,
+      },
+      body: form,
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new AppError("Stripe did not respond. Try again in a moment.", 502, "STRIPE_UNAVAILABLE");
+  }
   const body = (await res.json().catch(() => ({}))) as { id?: string; url?: string; expires_at?: number; error?: { message?: string } };
   if (!res.ok || !body.id || !body.url) {
     throw new AppError(`Stripe rejected the payment link: ${body.error?.message ?? res.status}`, 502, "STRIPE_ERROR");
@@ -99,15 +110,19 @@ const PAID_EVENTS = new Set(["checkout.session.completed", "checkout.session.asy
 export async function handleStripeEvent(db: Db, event: StripeEvent): Promise<WebhookOutcome> {
   if (!event?.id || !event.type) throw new ValidationError("Malformed Stripe event");
   return db.transaction(async (tx) => {
-    const [seen] = await tx.query("select 1 from integration_events where provider = 'stripe' and external_event_id = $1", [event.id]);
-    if (seen) return "duplicate";
+    // Claim the event id first: a concurrent redelivery blocks on the unique index here and then sees a duplicate.
+    const [claim] = await tx.query<{ id: string }>(
+      "insert into integration_events(provider, external_event_id, payload) values ('stripe', $1, '{}') on conflict do nothing returning id",
+      [event.id],
+    );
+    if (!claim) return "duplicate";
 
     let outcome: WebhookOutcome = "ignored";
     const obj = event.data?.object ?? {};
     const auditId = (obj.metadata as Record<string, string> | undefined)?.audit_id ?? (obj.client_reference_id as string | undefined);
     if (PAID_EVENTS.has(event.type) && obj.payment_status === "paid" && auditId) {
       const [audit] = await tx.query<Pick<AuditRow, "id" | "status" | "price_cents" | "currency" | "opportunity_id">>(
-        "select id, status, price_cents, currency, opportunity_id from audits where id::text = $1",
+        "select id, status, price_cents, currency, opportunity_id from audits where id::text = $1 for update",
         [auditId],
       );
       const amount = Number(obj.amount_total);
@@ -126,8 +141,8 @@ export async function handleStripeEvent(db: Db, event: StripeEvent): Promise<Web
         outcome = "paid";
       }
     }
-    await tx.query("insert into integration_events(provider, external_event_id, payload) values ('stripe', $1, $2)", [
-      event.id,
+    await tx.query("update integration_events set payload = $2 where id = $1", [
+      claim.id,
       JSON.stringify({ type: event.type, outcome, audit_id: auditId ?? null, object_id: obj.id ?? null, amount_total: obj.amount_total ?? null, currency: obj.currency ?? null }),
     ]);
     if (outcome !== "ignored") {

@@ -2,9 +2,17 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/auth/current";
-import { AppError } from "@/lib/errors";
+import { toAppError } from "@/lib/errors";
 import { parseMoneyToCents } from "@/domain/money";
 import type { Ctx } from "@/server/context";
+
+/**
+ * Same-origin path check for user-supplied return targets (`_back`). Rejects protocol-relative and backslash forms
+ * ("//evil.com", "/\evil.com" — browsers treat both as another host) and control characters.
+ */
+export function safeLocalPath(path: string, fallback: string): string {
+  return /^\/(?![/\\])[^\s\\\x00-\x1f]*$/.test(path) ? path : fallback;
+}
 
 function withMessage(path: string, key: "ok" | "error", msg: string) {
   const [base, query = ""] = path.split("?");
@@ -45,7 +53,8 @@ export async function run<T>(
     const result = await fn(ctx);
     target = withMessage(opts.next ? opts.next(result) : back, "ok", opts.success ?? "Saved");
   } catch (e) {
-    if (e instanceof AppError) target = withMessage(back, "error", e.message);
+    const err = toAppError(e);
+    if (err) target = withMessage(back, "error", err.message);
     else throw e;
   }
   revalidatePath("/", "layout");

@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { apiCtx } from "@/lib/auth/current";
-import { AppError } from "@/lib/errors";
+import { toAppError } from "@/lib/errors";
 import type { Ctx } from "@/server/context";
 
 export function jsonError(status: number, code: string, message: string) {
@@ -16,7 +16,8 @@ export async function withCtx(fn: (ctx: Ctx) => Promise<unknown>) {
     const data = await fn(ctx);
     return data instanceof Response ? data : NextResponse.json({ data });
   } catch (e) {
-    if (e instanceof AppError) return jsonError(e.status, e.code, e.message);
+    const err = toAppError(e);
+    if (err) return jsonError(err.status, err.code, err.message);
     console.error(e);
     return jsonError(500, "INTERNAL", "Unexpected error");
   }

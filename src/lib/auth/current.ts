@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, toAppError } from "@/lib/errors";
 import { getDb } from "@/lib/db";
 import type { Ctx } from "@/server/context";
 import { getSessionUser, SESSION_COOKIE } from "./session";
@@ -33,7 +33,8 @@ export async function load<T>(p: Promise<T>): Promise<T> {
   try {
     return await p;
   } catch (e) {
-    if (e instanceof NotFoundError || e instanceof ForbiddenError) notFound();
+    const err = toAppError(e);
+    if (err instanceof NotFoundError || err instanceof ForbiddenError) notFound();
     throw e;
   }
 }

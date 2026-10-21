@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { formatCents } from "@/domain/money";
 import { STAGE_LABELS, type Stage } from "@/domain/pipeline";
+import { APP_TIME_ZONE, toZonedInput } from "@/lib/time";
 
 export function PageHeader({ title, subtitle, actions, eyebrow }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
   return (
@@ -135,22 +136,21 @@ export function KV({ items }: { items: [string, ReactNode][] }) {
   );
 }
 
-/** Calendar dates ('YYYY-MM-DD') are rendered as-is (UTC) so they never shift a day; timestamps use local time. */
+/**
+ * Calendar dates ('YYYY-MM-DD') are rendered as-is (UTC) so they never shift a day; timestamps are shown in the
+ * business time zone, identically on the server and in the browser (no hydration drift).
+ */
 export const fmtDate = (d: Date | string | null | undefined) => {
   if (!d) return "—";
   const dateOnly = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
-  return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", ...(dateOnly ? { timeZone: "UTC" } : {}) });
+  return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: dateOnly ? "UTC" : APP_TIME_ZONE });
 };
 export const fmtDateTime = (d: Date | string | null | undefined) =>
-  d ? new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+  d ? new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: APP_TIME_ZONE }) : "—";
 export const fmtPct = (v: number | null | undefined, digits = 0) => (v === null || v === undefined ? "—" : `${(v * 100).toFixed(digits)}%`);
 export const fmtNum = (v: number | null | undefined, digits = 1) => (v === null || v === undefined ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: digits }));
-/** Value for <input type="datetime-local"> in the server's local time. */
-export const toLocalInput = (d: Date | string | null | undefined) => {
-  if (!d) return "";
-  const x = new Date(d);
-  return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-};
+/** Value for <input type="datetime-local"> on the business-zone wall clock. */
+export const toLocalInput = (d: Date | string | null | undefined) => (d ? toZonedInput(d) : "");
 export const centsInput = (c: number | null | undefined) => (c === null || c === undefined ? "" : (c / 100).toFixed(2));
 
 export function Hidden({ name, value }: { name: string; value: string }) {

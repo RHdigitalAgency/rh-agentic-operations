@@ -4,6 +4,7 @@ import { baseCurrency } from "@/domain/money";
 import { computeDashboard, type AnalyticsData, type Period } from "@/domain/analytics";
 import { opportunityVisible, Sql, type Ctx } from "./context";
 import { getInternalHourlyCostCents } from "./settings";
+import { zonedDay } from "@/lib/time";
 
 export interface DashboardFilters {
   from?: string;
@@ -14,7 +15,7 @@ export interface DashboardFilters {
 }
 
 export function resolvePeriod(f: DashboardFilters, now = new Date()): Period {
-  const to = optDay(f.to, "To") ?? now.toISOString().slice(0, 10);
+  const to = optDay(f.to, "To") ?? zonedDay(now);
   const from = optDay(f.from, "From") ?? new Date(new Date(`${to}T00:00:00Z`).getTime() - 89 * 86400000).toISOString().slice(0, 10);
   return from <= to ? { from, to } : { from: to, to: from };
 }
