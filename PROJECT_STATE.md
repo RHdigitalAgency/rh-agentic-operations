@@ -11,7 +11,7 @@ Date: 2026-10-20
 - 68 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
 
 ## Hosting
-- Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private, branch `main`).
+- Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private). Connected to Vercel: push to `main` → production; other branches → preview.
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
 - Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0002 are applied.
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
@@ -41,10 +41,9 @@ TASK-001 → TASK-024 done (see `tasks/BACKLOG.md`). Open: TASK-025 Stripe webho
 
 ## Next actions
 1. When the Instagram automation is ready: share the secret privately and point it at the README contract.
-2. Connect the GitHub repo to the Vercel project (Vercel's GitHub app needs access to RHdigitalAgency) so pushes deploy automatically.
-3. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
-4. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
-5. Add team members in Settings when they start using it.
+2. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
+3. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
+4. Add team members in Settings when they start using it.
 
 ## Validation clock
 Starts when real RH users and real prospects/clients enter the system (see `docs/10_BUSINESS_VALIDATION.md`).
