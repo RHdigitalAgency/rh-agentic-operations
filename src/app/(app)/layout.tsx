@@ -9,6 +9,8 @@ import type { Capability } from "@/lib/auth/roles";
 import { logoutAction } from "@/app/actions";
 import { Flash } from "@/components/Flash";
 import { NavLinks, type NavItem } from "@/components/NavLinks";
+import { SidebarShell } from "@/components/SidebarShell";
+import { Shortcuts } from "@/components/Shortcuts";
 
 const NAV: (NavItem & { cap: Capability })[] = [
   { href: "/", label: "Dashboard", icon: "dashboard", cap: "dashboard.read" },
@@ -35,15 +37,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = user.fullName ?? user.email;
   return (
     <div className="min-h-screen md:flex">
-      <aside className="bg-navy md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col">
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 md:block">
-          <Link href="/" className="block hover:no-underline" aria-label="RH Digital Agency — home">
-            <Image src="/brand/logo-white.png" alt="RH Digital Agency" width={1080} height={258} priority sizes="160px" className="h-auto w-40" />
-          </Link>
-          <div className="eyebrow mt-3 hidden text-[10px] text-cyan/90 md:block">Agentic Operations</div>
-        </div>
+      <aside className="sticky top-0 z-30 bg-navy md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col">
+        <SidebarShell
+          brand={
+            <div>
+              <Link href="/" className="block hover:no-underline" aria-label="RH Digital Agency — home">
+                <Image src="/brand/logo-white.png" alt="RH Digital Agency" width={1080} height={258} priority sizes="160px" className="h-auto w-32 md:w-40" />
+              </Link>
+              <div className="eyebrow mt-3 hidden text-[10px] text-cyan/90 md:block">Agentic Operations</div>
+            </div>
+          }
+        >
         <NavLinks items={NAV.filter((n) => can(user, n.cap)).map(({ href, label, icon }) => ({ href, label, icon }))} />
-        <div className="mt-auto hidden border-t border-white/10 p-4 md:block">
+        <div className="mt-auto border-t border-white/10 p-4">
           <Link href="/account" className="flex items-center gap-3 rounded-lg p-1 -m-1 hover:bg-white/6 hover:no-underline" title="My account">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-rh text-xs font-semibold text-white ring-2 ring-white/15">{initials(name)}</span>
             <div className="min-w-0">
@@ -57,35 +63,33 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </button>
           </form>
         </div>
+        </SidebarShell>
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-frost bg-white/90 px-6 py-3 backdrop-blur">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-frost bg-white/90 px-4 py-3 backdrop-blur sm:px-6 md:sticky md:top-0 md:z-10">
           {can(user, "crm.read") ? (
-            <form action="/search" className="relative w-full max-w-md">
+            <form action="/search" className="relative min-w-0 flex-1 md:max-w-md">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <input name="q" className="input pl-9" placeholder="Search companies, contacts, opportunities…" aria-label="Search" />
+              <input id="global-search" name="q" className="input pr-8 pl-9" placeholder="Search companies, contacts, opportunities…" aria-label="Search" aria-keyshortcuts="/" />
+              <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-frost px-1.5 text-[10px] text-slate-400 md:block">/</kbd>
             </form>
           ) : (
             <span />
           )}
           <div className="flex items-center gap-2">
             {can(user, "crm.write") ? (
-              <Link href="/leads/new" className="btn btn-cta">
-                <Plus className="size-4" aria-hidden /> New lead
+              <Link href="/leads/new" className="btn btn-cta" aria-keyshortcuts="n" title="New lead (N)">
+                <Plus className="size-4" aria-hidden /> <span className="hidden sm:inline">New lead</span>
               </Link>
             ) : null}
-            <form action={logoutAction} className="md:hidden">
-              <button className="btn" type="submit" aria-label="Sign out">
-                <LogOut className="size-4" aria-hidden />
-              </button>
-            </form>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl p-6">
+        <main className="mx-auto max-w-7xl p-4 sm:p-6">
           <Suspense>
             <Flash />
           </Suspense>
+          <Shortcuts canCreateLead={can(user, "crm.write")} />
           {children}
         </main>
       </div>

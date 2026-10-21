@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic, useState, useTransition } from "react";
+import { useCallback, useOptimistic, useState, useTransition } from "react";
 import { moveStageAction } from "@/app/actions";
 import { formatCents } from "@/domain/money";
 import { OPEN_STAGES, STAGE_LABELS, type Stage } from "@/domain/pipeline";
 import type { OpportunityRow } from "@/server/crm";
 import { fmtDate } from "./ui";
+import { Toast } from "./Flash";
 
 const initials = (name: string | null) =>
   (name ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]!.toUpperCase()).join("");
 
-function OppCard({ o, now, draggable, dragging }: { o: OpportunityRow; now: number; draggable: boolean; dragging: boolean }) {
-  const overdue = o.next_action_at && new Date(o.next_action_at).getTime() < now;
+function OppCard({ o, now, endOfToday, draggable, dragging }: { o: OpportunityRow; now: number; endOfToday: number; draggable: boolean; dragging: boolean }) {
+  const due = o.next_action_at ? new Date(o.next_action_at).getTime() : null;
+  const overdue = due !== null && due < now;
+  const dueToday = due !== null && !overdue && due <= endOfToday;
   const days = Math.max(0, Math.floor((now - new Date(o.stage_changed_at).getTime()) / 86400000));
   return (
     <Link
@@ -23,7 +26,7 @@ function OppCard({ o, now, draggable, dragging }: { o: OpportunityRow; now: numb
         e.dataTransfer.effectAllowed = "move";
       }}
       className={`block rounded-lg border bg-white p-3 text-sm shadow-[0_1px_2px_rgba(4,41,105,0.05)] transition hover:-translate-y-px hover:border-rh/40 hover:shadow-md hover:no-underline ${
-        overdue ? "border-l-[3px] border-red-300 border-l-red-500" : "border-frost"
+        overdue ? "border-l-[3px] border-red-300 border-l-red-500" : dueToday ? "border-l-[3px] border-amber-300 border-l-amber-500" : !o.next_action ? "border-l-[3px] border-amber-200 border-l-amber-300" : "border-frost"
       } ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${dragging ? "opacity-50" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -42,11 +45,11 @@ function OppCard({ o, now, draggable, dragging }: { o: OpportunityRow; now: numb
       </div>
       <div className="mt-2 border-t border-mist pt-2 text-xs">
         {o.next_action ? (
-          <div className={`flex items-start gap-1 ${overdue ? "font-medium text-red-600" : "text-slate-600"}`}>
-            <span aria-hidden>{overdue ? "⚠" : "→"}</span>
+          <div className={`flex items-start gap-1 ${overdue ? "font-medium text-red-600" : dueToday ? "font-medium text-amber-700" : "text-slate-600"}`}>
+            <span aria-hidden>{overdue ? "⚠" : dueToday ? "●" : "→"}</span>
             <span className="min-w-0">
               {o.next_action}
-              {o.next_action_at ? <span className="text-slate-400"> · {fmtDate(o.next_action_at)}</span> : null}
+              {o.next_action_at ? <span className={overdue || dueToday ? "" : "text-slate-400"}> · {overdue ? `overdue since ${fmtDate(o.next_action_at)}` : dueToday ? "due today" : fmtDate(o.next_action_at)}</span> : null}
             </span>
           </div>
         ) : (
@@ -62,7 +65,7 @@ function OppCard({ o, now, draggable, dragging }: { o: OpportunityRow; now: numb
  * Kanban with drag-and-drop between stages. The server validates every move with the same pipeline rules as the
  * stage form; a rejected move snaps back and shows the reason.
  */
-export function KanbanBoard({ opps, now, canMove }: { opps: OpportunityRow[]; now: number; canMove: boolean }) {
+export function KanbanBoard({ opps, now, endOfToday, canMove }: { opps: OpportunityRow[]; now: number; endOfToday: number; canMove: boolean }) {
   const [optimistic, applyMove] = useOptimistic(opps, (state, move: { id: string; to: Stage }) =>
     state.map((o) => (o.id === move.id ? { ...o, stage: move.to, stage_changed_at: new Date(now) } : o)),
   );
@@ -70,6 +73,7 @@ export function KanbanBoard({ opps, now, canMove }: { opps: OpportunityRow[]; no
   const [over, setOver] = useState<Stage | null>(null);
   const [message, setMessage] = useState<{ tone: "error" | "ok"; text: string } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const closeMessage = useCallback(() => setMessage(null), []);
 
   function drop(to: Stage, id: string) {
     const opp = optimistic.find((o) => o.id === id);
@@ -84,11 +88,8 @@ export function KanbanBoard({ opps, now, canMove }: { opps: OpportunityRow[]; no
 
   return (
     <div>
-      {message ? (
-        <div role={message.tone === "error" ? "alert" : "status"} className={`mb-3 rounded-lg border px-4 py-2.5 text-sm font-medium ${message.tone === "error" ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
-          {message.text}
-        </div>
-      ) : canMove ? (
+      <Toast message={message} onClose={closeMessage} />
+      {canMove ? (
         <p className="mb-3 text-xs text-slate-500">Tip: drag a card to another stage. Stage rules still apply — the deal moves only when its exit condition is met.</p>
       ) : null}
       <div className="flex gap-3 overflow-x-auto pb-4">
@@ -130,7 +131,7 @@ export function KanbanBoard({ opps, now, canMove }: { opps: OpportunityRow[]; no
                 }}
               >
                 {col.length ? (
-                  col.map((o) => <OppCard key={o.id} o={o} now={now} draggable={canMove} dragging={draggingId === o.id} />)
+                  col.map((o) => <OppCard key={o.id} o={o} now={now} endOfToday={endOfToday} draggable={canMove} dragging={draggingId === o.id} />)
                 ) : (
                   <div className="py-6 text-center text-xs text-slate-400">{over === stage ? "Drop here" : "No deals"}</div>
                 )}

@@ -1,6 +1,8 @@
 import { requireCap } from "@/lib/auth/user";
 import { ValidationError } from "@/lib/errors";
-import { listOpportunities } from "./crm";
+import { listCompanies, listOpportunities } from "./crm";
+import { listAudits } from "./audits";
+import { listProposals } from "./proposals";
 import type { Ctx } from "./context";
 
 /** RFC 4180 CSV with formula-injection protection for spreadsheet consumers. */
@@ -35,6 +37,29 @@ export async function exportCsv(ctx: Ctx, kind: string): Promise<string> {
     );
     const headers = ["id", "company", "deployment", "metric_key", "unit", "measurement_type", "value", "window_start", "window_end", "benefit_monthly", "notes", "created_at"];
     return toCsv(headers, rows.map((r) => headers.map((h) => (h === "benefit_monthly" ? (r.benefit_monthly_cents === null ? null : (Number(r.benefit_monthly_cents) / 100).toFixed(2)) : r[h]))));
+  }
+  const money = (c: number | null | undefined) => (c === null || c === undefined ? null : (c / 100).toFixed(2));
+  if (kind === "companies") {
+    const rows = await listCompanies(ctx);
+    return toCsv(
+      ["company_id", "name", "vertical", "website", "city", "country", "owner", "source", "status", "open_opportunities", "deployments", "created_at"],
+      rows.map((c) => [c.id, c.name, c.vertical, c.website, c.city, c.country, c.owner_name, c.source, c.status, c.open_opps, c.deployments, c.created_at]),
+    );
+  }
+  if (kind === "audits") {
+    const rows = await listAudits(ctx);
+    return toCsv(
+      ["audit_id", "company", "status", "price", "currency", "paid_at", "auditor", "processes", "presented_at"],
+      rows.map((a) => [a.id, a.company_name, a.status, money(a.price_cents), a.currency, a.paid_at, a.owner_name, a.process_count, a.presentation_at]),
+    );
+  }
+  if (kind === "proposals") {
+    const rows = await listProposals(ctx);
+    return toCsv(
+      ["proposal_id", "title", "company", "type", "status", "amount", "audit_credit", "net_amount", "currency", "sent_at", "decision_at"],
+      rows.map((x) => [x.id, x.title, x.company_name, x.proposal_type, x.status, money(x.amount_cents), money(x.audit_credit_cents),
+        money(x.amount_cents - (x.audit_credit_cents ?? 0)), x.currency, x.sent_at, x.decision_at]),
+    );
   }
   throw new ValidationError("Unknown export");
 }

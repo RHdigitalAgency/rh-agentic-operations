@@ -30,7 +30,7 @@ const isActive = (pathname: string, href: string) => (href === "/" ? pathname ==
 export function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible md:pb-0" aria-label="Main">
+    <nav className="flex flex-col gap-1 px-3 pb-3 md:pb-0" aria-label="Main">
       {items.map(({ href, label, icon }) => {
         const Icon = ICONS[icon];
         const active = isActive(pathname, href);

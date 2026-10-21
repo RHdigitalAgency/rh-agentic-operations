@@ -105,3 +105,21 @@
     display: none;
   }
 }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.toast-in { animation: toast-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .toast-in { animation: none; }
+}
+
+/* Phones: wide tables scroll sideways inside their card instead of squeezing or overflowing the page. */
+@media (max-width: 767px) {
+  .table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

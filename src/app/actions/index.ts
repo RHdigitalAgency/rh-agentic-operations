@@ -89,6 +89,17 @@ export async function transitionStageAction(fd: FormData) {
   { success: "Stage updated" });
 }
 
+export async function snoozeFollowUpAction(fd: FormData) {
+  const id = s(fd, "id");
+  const days = Number(s(fd, "days"));
+  await run(back(fd, "/followups"), (ctx) => crm.snoozeFollowUp(ctx, id, days), { success: `Snoozed ${days === 1 ? "1 day" : `${days} days`}` });
+}
+
+export async function completeFollowUpAction(fd: FormData) {
+  const id = s(fd, "id");
+  await run(back(fd, "/followups"), (ctx) => crm.completeFollowUp(ctx, id, formObject(fd)), { success: "Follow-up done — next step set" });
+}
+
 /** Drag-and-drop stage move from the pipeline board. Returns a result instead of redirecting. */
 export async function moveStageAction(id: string, to: string): Promise<{ ok: boolean; error?: string }> {
   try {

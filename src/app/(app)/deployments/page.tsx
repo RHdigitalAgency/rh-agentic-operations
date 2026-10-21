@@ -1,15 +1,29 @@
 import Link from "next/link";
+import { Rocket } from "lucide-react";
 import { load, requireCtx } from "@/lib/auth/current";
 import { readParams, type SearchParams } from "@/lib/params";
+import { sortRows } from "@/lib/sort";
 import { DEPLOYMENT_STATUSES, listDeployments } from "@/server/deployments";
-import { Empty, fmtDate, fmtNum, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, fmtDate, fmtNum, PageHeader, StatusBadge } from "@/components/ui";
+import { SortHeader } from "@/components/SortHeader";
+
+type Row = Awaited<ReturnType<typeof listDeployments>>[number];
 
 export const metadata = { title: "Deployments" };
 
 export default async function DeploymentsPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
-  const rows = await load(listDeployments(ctx, { status: p.status, mine: p.mine === "1" }));
+  const rows = sortRows<Row>(await load(listDeployments(ctx, { status: p.status, mine: p.mine === "1" })), {
+    name: (d) => d.name,
+    company: (d) => d.company_name,
+    status: (d) => d.status,
+    owner: (d) => d.owner_name,
+    start: (d) => d.start_date,
+    launch: (d) => d.launch_date,
+    hours: (d) => Number(d.hours),
+  }, p.sort, p.dir);
+  const h = (label: string, field: string, align?: "right", firstDir: "asc" | "desc" = "asc") => <SortHeader label={label} field={field} params={p} path="/deployments" align={align} firstDir={firstDir} />;
   return (
     <div>
       <PageHeader eyebrow="Delivery" title="Deployments" subtitle="Delivery tracker — scope, agent roles, controls, QA, effort and measured results" />
@@ -18,10 +32,15 @@ export default async function DeploymentsPage({ searchParams }: { searchParams: 
         <Link href="/deployments?mine=1" className={`chip ${p.mine ? "chip-active" : ""}`}>Mine</Link>
         {DEPLOYMENT_STATUSES.map((s) => <Link key={s} href={`/deployments?status=${s}`} className={`chip ${p.status === s ? "chip-active" : ""}`}>{s.toLowerCase()}</Link>)}
       </div>
-      {rows.length === 0 ? <Empty>No deployments. They are created when a pilot/deployment proposal is accepted.</Empty> : (
+      {rows.length === 0 ? (
+        p.status || p.mine ? <EmptyState icon={Rocket} title="No deployments match" action={<Link href="/deployments" className="btn hover:no-underline">Show all deployments</Link>} /> : (
+          <EmptyState icon={Rocket} title="No deployments yet" text="A deployment is created automatically when a client accepts a pilot or deployment proposal."
+            action={<Link href="/proposals?status=SENT" className="btn hover:no-underline">See proposals awaiting a decision</Link>} />
+        )
+      ) : (
         <div className="card overflow-x-auto p-0">
           <table className="table">
-            <thead><tr><th>Deployment</th><th>Company</th><th>Status</th><th>Owner</th><th>Start</th><th>Launch</th><th className="text-right">Hours</th></tr></thead>
+            <thead><tr>{h("Deployment", "name")}{h("Company", "company")}{h("Status", "status")}{h("Owner", "owner")}{h("Start", "start", undefined, "desc")}{h("Launch", "launch", undefined, "desc")}{h("Hours", "hours", "right", "desc")}</tr></thead>
             <tbody>{rows.map((d) => (
               <tr key={d.id}>
                 <td><Link href={`/deployments/${d.id}`}>{d.name}</Link></td>
