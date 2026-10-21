@@ -16,7 +16,9 @@
     "db:reset": "tsx scripts/db.ts reset",
     "check": "npm run typecheck && npm run lint && npm run test",
     "user:create-admin": "tsx scripts/create-admin.ts",
-    "lead:simulate": "tsx scripts/simulate-lead.ts"
+    "lead:simulate": "tsx scripts/simulate-lead.ts",
+    "demo:add": "tsx scripts/demo-data.ts add",
+    "demo:remove": "tsx scripts/demo-data.ts remove"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",

@@ -30,16 +30,29 @@ export const DEMO_USERS: [string, Role, string, string | null][] = [
 
 const DAY = 86400000;
 
-export async function seedDemo(db: Db, password: string, log: (m: string) => void = () => {}) {
+export interface SeedOptions {
+  /**
+   * "local" (default): empty database, demo users can sign in with `password`.
+   * "hosted-demo": adds the same dataset next to real data for review. Demo users get no password and are
+   * deactivated afterwards (they can never sign in); settings are restored. Remove with `npm run demo:remove`.
+   */
+  mode?: "local" | "hosted-demo";
+}
+
+export async function seedDemo(db: Db, password: string | null, log: (m: string) => void = () => {}, opts: SeedOptions = {}) {
+  const hosted = opts.mode === "hosted-demo";
   const [{ n }] = await db.query<{ n: number }>("select count(*)::int as n from app_users");
-  if (n > 0) throw new Error("Database already has users; run `npm run db:reset` first to reseed demo data.");
+  if (n > 0 && !hosted) throw new Error("Database already has users; run `npm run db:reset` first to reseed demo data.");
+  if (!hosted && (!password || password.length < 10)) throw new Error("Local demo seed needs a password (10+ chars)");
+  const [ownerSetting] = await db.query<{ value: unknown }>("select value from app_settings where key = 'default_lead_owner_user_id'");
 
   const users: Record<string, SessionUser> = {};
-  const hash = hashPassword(password);
-  for (const [email, role, name, territory] of DEMO_USERS) {
+  const hash = hosted ? null : hashPassword(password!);
+  for (const [localEmail, role, name, territory] of DEMO_USERS) {
+    const email = hosted ? localEmail.replace("@example.com", "@demo.example.com") : localEmail;
     const [row] = await db.query<{ id: string }>(
       "insert into app_users(email, full_name, role, territory, password_hash) values ($1,$2,$3,$4,$5) returning id",
-      [email, name, role, territory, hash],
+      [email, hosted ? `${name} (demo)` : name, role, territory, hash],
     );
     users[email.split("@")[0].split(".")[0]] = { id: row.id, email, fullName: name, role };
   }
@@ -272,6 +285,11 @@ export async function seedDemo(db: Db, password: string, log: (m: string) => voi
     submitReferral(partner, { company_name: "Andes Dental Group", vertical: "DENTAL_ADMIN", contact_name: "Dra. Inés Vargas", email: "ines@andesdental.example.com", notes: "3 clinics, front desk overwhelmed with recalls." }),
   );
 
+  if (hosted) {
+    // Demo users stay as record owners but can never sign in; the real intake setting is restored.
+    await db.query("update app_users set active = false where id = any($1::uuid[])", [Object.values(users).map((u) => u.id)]);
+    await db.query("update app_settings set value = $1 where key = 'default_lead_owner_user_id'", [JSON.stringify(ownerSetting?.value ?? null)]);
+  }
   log("Done.");
   function day(offset: number) {
     return new Date(Date.now() + offset * DAY).toISOString().slice(0, 10);

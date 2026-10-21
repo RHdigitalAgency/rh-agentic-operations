@@ -30,6 +30,7 @@ Demo users (password = `SEED_DEMO_PASSWORD` from `.env.local`, default `rh-local
 Quality gates: `npm run check` (typecheck + lint + tests), `npm run build`.
 
 Database commands: `npm run db:migrate`, `npm run db:seed` (empty DB only), `npm run db:reset` (local PGlite only), `npm run user:create-admin`.
+Removable demo data on a hosted database: `npm run demo:add` / `npm run demo:remove` (demo users cannot sign in; remove deletes exactly what was added).
 Set `DATABASE_URL` to use real Postgres/Supabase instead. See `docs/11_DEPLOYMENT_AND_RECOVERY.md` and `adrs/0003`.
 
 ### Core workflow in the UI

@@ -8,7 +8,11 @@ Date: 2026-10-20
 - PostgreSQL schema as SQL migrations (`database/migrations/`), deterministic reference data, local demo seed.
 - Service layer (`src/server/`) holding all business rules and data-level RBAC. Pages, server actions and API routes are thin wrappers.
 - Pure, unit-tested domain logic (`src/domain/`): pipeline rules, scoring, ROI, KPI comparison, analytics, money.
-- 74 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
+- 75 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
+
+## ⚠ Demo data in production
+Production currently contains the **removable demo dataset** (added 2026-10-21 for UI review: 13 demo companies, 7 demo users that cannot sign in). Before entering real clients run:
+`set -a; . ./.env.staging.local; set +a; npm run demo:remove` — it deletes exactly what was added (tested) and leaves real records untouched.
 
 ## Hosting
 - Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private). Connected to Vercel: push to `main` → production; other branches → preview.
@@ -43,6 +47,7 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. That setting breaks postgres.js `sql.begin`, so transactions use a reserved connection with explicit BEGIN/COMMIT (fixed 2026-10-20; writes were failing in production between the pipelining change and this fix). Re-run the real-Postgres suite after driver or schema changes.
 
 ## Next actions
+0. Remove the demo data from production (`npm run demo:remove`, see top) before real use.
 1. Switch Stripe to live mode before the first real US client: live secret key + live webhook signing secret in Vercel (Production), then redeploy.
 2. When the Instagram automation is ready: share the secret privately and point it at the README contract.
 3. Further UI feedback: develop locally on PGlite with demo data; previews for quick visual review.
