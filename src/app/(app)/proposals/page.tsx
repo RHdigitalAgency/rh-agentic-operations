@@ -4,16 +4,18 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { listProposals } from "@/server/proposals";
 import { Empty, fmtDate, Money, PageHeader, StatusBadge } from "@/components/ui";
 
+export const metadata = { title: "Proposals" };
+
 export default async function ProposalsPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
   const proposals = await load(listProposals(ctx, { status: p.status }));
   return (
     <div>
-      <PageHeader title="Proposals" subtitle="Pilot, deployment, retainer and starter proposals — linked to account, opportunity and audit" />
-      <div className="mb-3 flex flex-wrap gap-1">
+      <PageHeader eyebrow="Commercial" title="Proposals" subtitle="Pilot, deployment, retainer and starter proposals — linked to account, opportunity and audit" />
+      <div className="mb-4 flex flex-wrap gap-1.5">
         {["", "DRAFT", "SENT", "ACCEPTED", "REJECTED", "WITHDRAWN"].map((s) => (
-          <Link key={s} href={s ? `/proposals?status=${s}` : "/proposals"} className={`btn hover:no-underline ${(p.status ?? "") === s ? "btn-primary" : ""}`}>{s ? s.toLowerCase() : "all"}</Link>
+          <Link key={s} href={s ? `/proposals?status=${s}` : "/proposals"} className={`chip ${(p.status ?? "") === s ? "chip-active" : ""}`}>{s ? s.toLowerCase() : "all"}</Link>
         ))}
       </div>
       {proposals.length === 0 ? <Empty>No proposals.</Empty> : (

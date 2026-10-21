@@ -74,6 +74,12 @@
   .btn-ghost {
     @apply border-transparent bg-transparent shadow-none hover:bg-mist;
   }
+  .chip {
+    @apply inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-navy capitalize ring-1 ring-frost ring-inset hover:bg-mist hover:no-underline;
+  }
+  .chip-active {
+    @apply bg-navy text-white ring-navy hover:bg-navy;
+  }
   .table {
     @apply w-full text-left text-sm;
   }

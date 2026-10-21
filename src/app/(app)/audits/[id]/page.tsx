@@ -9,11 +9,26 @@ import { classificationLabel, getAuditWorkspace } from "@/server/audits";
 import { listActiveUsers } from "@/server/crm";
 import { stripeConfigured } from "@/server/stripe";
 import { formatCents } from "@/domain/money";
-import { Badge, Card, Empty, Field, fmtDate, fmtDateTime, fmtNum, fmtPct, Hidden, KV, Money, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Badge, Card, Empty, Field, fmtDate, fmtDateTime, fmtNum, fmtPct, Hidden, KV, Money, PageHeader, Stat, StatusBadge, Stepper, type Step } from "@/components/ui";
+import { Bot, Calculator, Check, CreditCard, Search, Workflow } from "lucide-react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { RoiForm } from "../RoiForm";
 
+export const metadata = { title: "Audit" };
+
 const CLASS_TONE = { AGENT_READY: "green", AUTOMATE: "blue", REDESIGN_FIRST: "amber", HUMAN_ONLY: "gray" } as const;
+
+const LIFECYCLE = [["OFFERED", "Offered"], ["PAID", "Paid"], ["IN_PROGRESS", "Discovery"], ["PRESENTED", "Presented"]] as const;
+
+function lifecycleSteps(status: string, paidAt: Date | null, presentedAt: Date | null): Step[] {
+  if (status === "CANCELLED") return LIFECYCLE.map(([, label]) => ({ label, state: "blocked" as const, hint: "cancelled" }));
+  const cur = LIFECYCLE.findIndex(([code]) => code === status);
+  return LIFECYCLE.map(([code, label], i) => ({
+    label,
+    state: i < cur || (code === "PRESENTED" && status === "PRESENTED") ? "done" : i === cur ? "current" : "todo",
+    hint: code === "PAID" && paidAt ? fmtDate(paidAt) : code === "PRESENTED" && presentedAt ? fmtDate(presentedAt) : undefined,
+  }));
+}
 
 export default async function AuditWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,9 +43,10 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
   const stripeOn = stripeConfigured();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
-        title={<>Audit · {audit.company_name} <StatusBadge status={audit.status} /></>}
+        eyebrow="Agentic Operations Audit"
+        title={<>{audit.company_name} <StatusBadge status={audit.status} /></>}
         subtitle={<>
           <Link href={`/companies/${audit.company_id}`}>Account</Link>
           {audit.opportunity_id ? <> · <Link href={`/opportunities/${audit.opportunity_id}`}>Opportunity</Link></> : null}
@@ -51,8 +67,27 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         </>}
       />
 
+      <Stepper steps={lifecycleSteps(audit.status, audit.paid_at, audit.presentation_at)} />
+
+      <div className="flex flex-wrap gap-2">
+        {([
+          ["Discovery notes", Boolean(audit.business_goals || audit.systems_summary)],
+          [`${ws.processes.length} process${ws.processes.length === 1 ? "" : "es"} mapped`, ws.processes.length > 0],
+          ["All classified", ws.processes.length > 0 && ws.processes.every((p) => p.classification)],
+          ["All scored", ws.processes.length > 0 && ws.processes.every((p) => p.score)],
+          ["ROI scenario", ws.roiScenarios.length > 0],
+          ["Recommended pilot", Boolean(pilot)],
+          ["Proposal created", ws.proposals.some((pr) => pr.status !== "WITHDRAWN")],
+        ] as const).map(([label, done]) => (
+          <span key={label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${done ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-white text-slate-500 ring-frost"}`}>
+            {done ? <Check className="size-3.5" aria-hidden /> : <span className="size-1.5 rounded-full bg-slate-300" aria-hidden />}
+            {label}
+          </span>
+        ))}
+      </div>
+
       {audit.status === "OFFERED" && can(ctx.user, "audit.sell") ? (
-        <Card title={`Collect audit payment · ${formatCents(audit.price_cents, cur)}`}>
+        <Card icon={CreditCard} title={`Collect audit payment · ${formatCents(audit.price_cents, cur)}`}>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <h3 className="text-sm font-medium">Manual confirmation <span className="font-normal text-slate-500">— any client (transfer, Yape, Zelle, card terminal…)</span></h3>
@@ -91,7 +126,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         <Stat label="Presented" value={fmtDate(audit.presentation_at)} hint={audit.deliverable_url ? <a href={audit.deliverable_url} target="_blank" rel="noreferrer">deliverable</a> : undefined} />
       </div>
 
-      <Card title="1 · Discovery — goals, team, systems">
+      <Card icon={Search} title="1 · Discovery — goals, team, systems">
         <form action={updateAuditDiscoveryAction}>
           <Hidden name="id" value={id} />
           <fieldset disabled={!canWrite} className="grid gap-3 md:grid-cols-3">
@@ -112,7 +147,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         </form>
       </Card>
 
-      <Card title="2 · Process inventory, classification & score">
+      <Card icon={Workflow} title="2 · Process inventory, classification & score">
         {ws.processes.length === 0 ? <Empty>No processes mapped yet.</Empty> : (
           <div className="overflow-x-auto">
             <table className="table">
@@ -150,7 +185,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         ) : null}
       </Card>
 
-      <Card title="3 · Agentic opportunities & recommended pilot">
+      <Card icon={Bot} title="3 · Agentic opportunities & recommended pilot">
         {ws.agenticOpportunities.length === 0 ? <Empty>Define agentic opportunities from classified processes (open a process).</Empty> : (
           <div className="overflow-x-auto">
             <table className="table">
@@ -190,9 +225,9 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
         )}
       </Card>
 
-      <Card title="4 · ROI scenarios (estimates — not guarantees)">
+      <Card icon={Calculator} title="4 · ROI scenarios (estimates — not guarantees)">
         {ws.roiScenarios.length === 0 ? <Empty>No ROI scenario yet.</Empty> : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {ws.roiScenarios.map((r) => {
               const versions = ws.roiVersions.filter((v) => v.scenario_key === r.scenario_key);
               return (

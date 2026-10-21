@@ -8,6 +8,8 @@ import { riskFlags, SCORE_DIMENSIONS, calculateScore } from "@/domain/scoring";
 import { Badge, Card, centsInput, Empty, Field, fmtDateTime, fmtNum, Hidden, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 
+export const metadata = { title: "Process" };
+
 export default async function ProcessPage({ params }: { params: Promise<{ id: string; pid: string }> }) {
   const { id, pid } = await params;
   const ctx = await requireCtx();
@@ -20,8 +22,8 @@ export default async function ProcessPage({ params }: { params: Promise<{ id: st
   const breakdown = latest ? calculateScore(latest, latest.weights) : null;
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div className="space-y-6">
+      <PageHeader eyebrow="Process mapping"
         title={<>{process.name} <Badge tone={process.classification === "AGENT_READY" ? "green" : "gray"}>{classificationLabel(process.classification)}</Badge></>}
         subtitle={<><Link href={`/audits/${id}`}>← Audit · {audit.company_name}</Link></>}
       />

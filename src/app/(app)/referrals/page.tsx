@@ -4,13 +4,15 @@ import { listMyReferrals, listReference } from "@/server/crm";
 import { Card, Empty, Field, fmtDate, PageHeader, StageBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 
+export const metadata = { title: "My referrals" };
+
 /** Partner / external rep surface: submit referrals and see only their status. */
 export default async function ReferralsPage() {
   const ctx = await requireCtx();
   const [rows, ref] = await Promise.all([load(listMyReferrals(ctx)), listReference(ctx.db)]);
   return (
     <div className="max-w-4xl space-y-4">
-      <PageHeader title="My referrals" subtitle="Opportunities attributed to you and their current status" />
+      <PageHeader eyebrow="Partner" title="My referrals" subtitle="Opportunities attributed to you and their current status" />
       <Card title="Attributed opportunities">
         {rows.length === 0 ? <Empty>No referrals yet.</Empty> : (
           <table className="table">

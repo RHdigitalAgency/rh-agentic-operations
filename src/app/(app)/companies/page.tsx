@@ -5,6 +5,8 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { listCompanies, listReference } from "@/server/crm";
 import { Empty, PageHeader } from "@/components/ui";
 
+export const metadata = { title: "Companies" };
+
 export default async function CompaniesPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
@@ -12,7 +14,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Se
   const vName = new Map(ref.verticals.map((v) => [v.code, v.name]));
   return (
     <div>
-      <PageHeader title="Companies" subtitle={`${companies.length} accounts`} actions={can(ctx.user, "crm.write") ? <Link className="btn btn-primary hover:no-underline" href="/companies/new">+ Company</Link> : null} />
+      <PageHeader eyebrow="Accounts" title="Companies" subtitle={`${companies.length} accounts`} actions={can(ctx.user, "crm.write") ? <Link className="btn btn-primary hover:no-underline" href="/companies/new">+ Company</Link> : null} />
       <form className="card mb-4 flex flex-wrap items-end gap-3" method="get">
         <label><span className="label">Name</span><input className="input" name="q" defaultValue={p.q} /></label>
         <label><span className="label">Vertical</span>

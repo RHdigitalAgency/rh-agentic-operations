@@ -4,17 +4,19 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { DEPLOYMENT_STATUSES, listDeployments } from "@/server/deployments";
 import { Empty, fmtDate, fmtNum, PageHeader, StatusBadge } from "@/components/ui";
 
+export const metadata = { title: "Deployments" };
+
 export default async function DeploymentsPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
   const rows = await load(listDeployments(ctx, { status: p.status, mine: p.mine === "1" }));
   return (
     <div>
-      <PageHeader title="Deployments" subtitle="Delivery tracker — scope, agent roles, controls, QA, effort and measured results" />
-      <div className="mb-3 flex flex-wrap gap-1">
-        <Link href="/deployments" className={`btn hover:no-underline ${!p.status && !p.mine ? "btn-primary" : ""}`}>All</Link>
-        <Link href="/deployments?mine=1" className={`btn hover:no-underline ${p.mine ? "btn-primary" : ""}`}>Mine</Link>
-        {DEPLOYMENT_STATUSES.map((s) => <Link key={s} href={`/deployments?status=${s}`} className={`btn hover:no-underline ${p.status === s ? "btn-primary" : ""}`}>{s.toLowerCase()}</Link>)}
+      <PageHeader eyebrow="Delivery" title="Deployments" subtitle="Delivery tracker — scope, agent roles, controls, QA, effort and measured results" />
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        <Link href="/deployments" className={`chip ${!p.status && !p.mine ? "chip-active" : ""}`}>All</Link>
+        <Link href="/deployments?mine=1" className={`chip ${p.mine ? "chip-active" : ""}`}>Mine</Link>
+        {DEPLOYMENT_STATUSES.map((s) => <Link key={s} href={`/deployments?status=${s}`} className={`chip ${p.status === s ? "chip-active" : ""}`}>{s.toLowerCase()}</Link>)}
       </div>
       {rows.length === 0 ? <Empty>No deployments. They are created when a pilot/deployment proposal is accepted.</Empty> : (
         <div className="card overflow-x-auto p-0">

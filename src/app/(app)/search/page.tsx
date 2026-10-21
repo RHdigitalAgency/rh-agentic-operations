@@ -4,14 +4,16 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { search } from "@/server/crm";
 import { Card, Empty, PageHeader, StageBadge } from "@/components/ui";
 
+export const metadata = { title: "Search" };
+
 export default async function SearchPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const { q = "" } = await readParams(searchParams);
   const r = await load(search(ctx, q));
   const total = r.companies.length + r.contacts.length + r.opportunities.length;
   return (
-    <div className="space-y-4">
-      <PageHeader title={`Search: “${q}”`} subtitle={q.trim().length < 2 ? "Type at least 2 characters" : `${total} result(s) within your access`} />
+    <div className="space-y-6">
+      <PageHeader eyebrow="Search" title={`Search: “${q}”`} subtitle={q.trim().length < 2 ? "Type at least 2 characters" : `${total} result(s) within your access`} />
       {total === 0 ? <Empty>No matches.</Empty> : (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Companies">

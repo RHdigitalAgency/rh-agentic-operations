@@ -4,6 +4,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { authenticate, createSession, deleteSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { revalidatePath } from "next/cache";
+import { requireCtx } from "@/lib/auth/current";
+import { AppError } from "@/lib/errors";
 import { formObject, run } from "./run";
 import * as crm from "@/server/crm";
 import * as audits from "@/server/audits";
@@ -77,6 +80,19 @@ export async function transitionStageAction(fd: FormData) {
   await run(back(fd, `/opportunities/${id}`), (ctx) =>
     crm.transitionStage(ctx, id, s(fd, "to"), { loss_reason: fd.get("loss_reason"), loss_notes: fd.get("loss_notes"), nurture_at: fd.get("nurture_at") }),
   { success: "Stage updated" });
+}
+
+/** Drag-and-drop stage move from the pipeline board. Returns a result instead of redirecting. */
+export async function moveStageAction(id: string, to: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const ctx = await requireCtx();
+    await crm.transitionStage(ctx, id, to);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof AppError) return { ok: false, error: e.message };
+    throw e;
+  }
 }
 
 export async function archiveOpportunityAction(fd: FormData) {

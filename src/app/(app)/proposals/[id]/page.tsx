@@ -7,6 +7,8 @@ import { listActiveUsers } from "@/server/crm";
 import { Card, centsInput, Field, fmtDateTime, Hidden, KV, Money, PageHeader, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 
+export const metadata = { title: "Proposal" };
+
 export default async function ProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireCtx();
@@ -19,7 +21,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="max-w-4xl space-y-4">
-      <PageHeader
+      <PageHeader eyebrow="Proposal"
         title={<>{p.title} <StatusBadge status={p.status} /></>}
         subtitle={<>{p.proposal_type} · <Link href={`/companies/${p.company_id}`}>{p.company_name}</Link></>}
       />

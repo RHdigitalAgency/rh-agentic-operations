@@ -4,6 +4,8 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { followUpQueue, type OpportunityRow } from "@/server/crm";
 import { Card, Empty, fmtDateTime, PageHeader, StageBadge } from "@/components/ui";
 
+export const metadata = { title: "Follow-ups" };
+
 function Queue({ title, rows, tone }: { title: string; rows: OpportunityRow[]; tone?: string }) {
   return (
     <Card title={<span className={tone}>{title} ({rows.length})</span>}>
@@ -33,8 +35,8 @@ export default async function FollowUpsPage({ searchParams }: { searchParams: Se
   const mine = p.mine === "1";
   const q = await load(followUpQueue(ctx, { ownerId: mine ? ctx.user.id : undefined }));
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div className="space-y-6">
+      <PageHeader eyebrow="Sales"
         title="Follow-up queue"
         subtitle="Open opportunities by next-action due date"
         actions={<Link className="btn hover:no-underline" href={mine ? "/followups" : "/followups?mine=1"}>{mine ? "Show all visible" : "Only mine"}</Link>}

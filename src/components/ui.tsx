@@ -144,3 +144,43 @@ export const centsInput = (c: number | null | undefined) => (c === null || c ===
 export function Hidden({ name, value }: { name: string; value: string }) {
   return <input type="hidden" name={name} value={value} />;
 }
+
+export interface Step {
+  label: string;
+  hint?: ReactNode;
+  state: "done" | "current" | "todo" | "blocked";
+}
+
+/**
+ * Progress tracker (pipeline stages, audit lifecycle, deployment status). Long trackers (> 6 steps) use a compact
+ * layout with the marker above a wrapped label so every stage stays readable without scrolling.
+ */
+export function Stepper({ steps, className = "" }: { steps: Step[]; className?: string }) {
+  const compact = steps.length > 6;
+  const dotTone = (s: Step) =>
+    s.state === "done" ? "bg-rh text-white"
+    : s.state === "current" ? "bg-cta text-white ring-4 ring-cta/15"
+    : s.state === "blocked" ? "bg-red-100 text-red-600"
+    : "bg-mist text-slate-400";
+  const labelTone = (s: Step) =>
+    s.state === "current" ? "text-navy" : s.state === "blocked" ? "text-red-600" : s.state === "done" ? "text-slate-700" : "text-slate-400";
+  return (
+    <ol className={`flex rounded-xl border border-frost bg-white ${compact ? "px-2 py-3" : "overflow-x-auto p-2"} ${className}`}>
+      {steps.map((s, i) => (
+        <li key={`${s.label}-${i}`} className={compact ? "relative flex min-w-0 flex-1 flex-col items-center px-0.5 text-center" : "flex min-w-[7.5rem] flex-1 items-center gap-2 px-2 py-1.5"}>
+          {compact && i < steps.length - 1 ? (
+            <span className={`absolute top-3 left-1/2 h-px w-full ${s.state === "done" ? "bg-rh" : "bg-frost"}`} aria-hidden />
+          ) : null}
+          <span className={`relative flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${dotTone(s)}`}>
+            {s.state === "done" ? "✓" : s.state === "blocked" ? "×" : i + 1}
+          </span>
+          <span className={compact ? "mt-1.5 min-w-0" : "min-w-0"}>
+            <span className={`block text-xs font-semibold ${compact ? "text-[11px] leading-tight" : "truncate"} ${labelTone(s)}`}>{s.label}</span>
+            {s.hint ? <span className="block truncate text-[11px] text-slate-400">{s.hint}</span> : null}
+          </span>
+          {!compact && i < steps.length - 1 ? <span className={`ml-auto hidden h-px w-4 shrink-0 sm:block ${s.state === "done" ? "bg-rh" : "bg-frost"}`} aria-hidden /> : null}
+        </li>
+      ))}
+    </ol>
+  );
+}

@@ -6,9 +6,31 @@ import {
   transitionStageAction, updateOpportunityAction,
 } from "@/app/actions";
 import { ACTIVITY_TYPES, getOpportunityDetail, listActiveUsers, listReference } from "@/server/crm";
-import { allowedTargets, STAGE_LABELS } from "@/domain/pipeline";
-import { Badge, Card, centsInput, Empty, Field, fmtDate, fmtDateTime, Hidden, KV, Money, PageHeader, StageBadge, StatusBadge, toLocalInput } from "@/components/ui";
+import { allowedTargets, STAGE_LABELS, STAGES, type Stage } from "@/domain/pipeline";
+import { Activity, BadgeDollarSign, ClipboardList, FileSignature, GitBranch, History, Megaphone, PhoneCall } from "lucide-react";
+import { Badge, Card, centsInput, Empty, Field, fmtDate, fmtDateTime, Hidden, KV, Money, PageHeader, StageBadge, StatusBadge, Stepper, toLocalInput, type Step } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+
+export const metadata = { title: "Opportunity" };
+
+const TRACK: [Stage, string][] = [
+  ["NEW_LEAD", "New lead"], ["CONTACTED", "Contacted"], ["FIT_CALL_BOOKED", "Fit call"], ["FIT_QUALIFIED", "Qualified"],
+  ["AUDIT_OFFERED", "Audit offered"], ["AUDIT_PAID", "Audit paid"], ["AUDIT_IN_PROGRESS", "Discovery"], ["AUDIT_PRESENTED", "Presented"],
+  ["PROPOSAL_SENT", "Proposal"], ["WON_DEPLOYMENT", "Won"],
+];
+
+/** Deal progress across the fixed pipeline, from the stage history (lost deals show where they stopped). */
+function dealSteps(stage: Stage, history: { to_stage: string }[]): Step[] {
+  const reached = Math.max(0, ...history.filter((h) => h.to_stage !== "LOST_NURTURE").map((h) => Math.min(STAGES.indexOf(h.to_stage as Stage), 9)));
+  const won = stage === "WON_DEPLOYMENT" || stage === "WON_RETAINER";
+  const lost = stage === "LOST_NURTURE";
+  return TRACK.map(([code, label], i) => {
+    if (won) return { label: i === 9 && stage === "WON_RETAINER" ? "Won · retainer" : label, state: "done" };
+    if (lost) return { label: i === reached + 1 ? "Lost / nurture" : label, state: i <= reached ? "done" : i === reached + 1 ? "blocked" : "todo" };
+    const cur = STAGES.indexOf(stage);
+    return { label, state: i < cur ? "done" : code === stage ? "current" : "todo" };
+  });
+}
 
 export default async function OpportunityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,8 +44,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
   const openFitCall = fitCalls.find((f) => !f.completed_at);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
+        eyebrow="Opportunity"
         title={<>{opp.company_name} <StageBadge stage={opp.stage} /></>}
         subtitle={<>{opp.title ?? "Opportunity"} · <Link href={`/companies/${opp.company_id}`}>Account view →</Link></>}
         actions={ctx.user.role === "ADMIN_MANAGER" ? (
@@ -31,8 +54,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
         ) : null}
       />
 
+      <Stepper steps={dealSteps(opp.stage, history)} />
+
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Attribution" className="lg:col-span-1">
+        <Card icon={Megaphone} title="Attribution" className="lg:col-span-1">
           <KV items={[
             ["Source", opp.source],
             ["Campaign", opp.campaign],
@@ -45,7 +70,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
           ]} />
         </Card>
 
-        <Card title="Stage" className="lg:col-span-2">
+        <Card icon={GitBranch} title="Stage" className="lg:col-span-2">
           <p className="muted mb-3">
             In <b>{STAGE_LABELS[opp.stage]}</b> since {fmtDate(opp.stage_changed_at)}.
             {opp.stage === "LOST_NURTURE" ? ` Reason: ${ref.lossReasons.find((r) => r.code === opp.loss_reason)?.name ?? "—"}${opp.nurture_at ? ` · nurture on ${fmtDate(opp.nurture_at)}` : ""}${opp.loss_notes ? ` · ${opp.loss_notes}` : ""}` : ""}
@@ -73,7 +98,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
         </Card>
       </div>
 
-      <Card title="Details & next action">
+      <Card icon={ClipboardList} title="Details & next action">
         <form action={updateOpportunityAction} className="grid gap-3 md:grid-cols-4">
           <Hidden name="id" value={id} />
           <Field label="Title"><input className="input" name="title" defaultValue={opp.title ?? ""} disabled={!canWrite} /></Field>
@@ -97,7 +122,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Fit calls">
+        <Card icon={PhoneCall} title="Fit calls">
           {fitCalls.length === 0 ? <Empty>No fit call yet.</Empty> : (
             <ul className="space-y-3">
               {fitCalls.map((f) => (
@@ -130,7 +155,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
           ) : null}
         </Card>
 
-        <Card title="Paid audit">
+        <Card icon={BadgeDollarSign} title="Paid audit">
           {audits.length ? (
             <ul className="space-y-1 text-sm">
               {audits.map((a) => (
@@ -155,7 +180,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
       </div>
 
       {can(ctx.user, "proposal.read") ? (
-        <Card title="Proposals">
+        <Card icon={FileSignature} title="Proposals">
           {proposals.length === 0 ? <Empty>No proposals. Pilot proposals are normally created from the audit&apos;s recommended pilot.</Empty> : (
             <table className="table">
               <thead><tr><th>Title</th><th>Type</th><th>Status</th><th className="text-right">Amount</th></tr></thead>
@@ -186,7 +211,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Activities">
+        <Card icon={Activity} title="Activities">
           {can(ctx.user, "activity.write") ? (
             <form action={addActivityAction} className="mb-3 grid gap-2 md:grid-cols-4">
               <Hidden name="opportunity_id" value={id} /><Hidden name="_back" value={backTo} />
@@ -201,7 +226,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
             </ul>
           )}
         </Card>
-        <Card title="Stage history (audit trail)">
+        <Card icon={History} title="Stage history (audit trail)">
           <ol className="space-y-1 text-sm">
             {history.map((h, i) => (
               <li key={i}><span className="text-slate-500">{fmtDateTime(h.changed_at)}</span> · {h.from_stage ? `${STAGE_LABELS[h.from_stage as keyof typeof STAGE_LABELS]} → ` : ""}<b>{STAGE_LABELS[h.to_stage as keyof typeof STAGE_LABELS]}</b> <span className="text-slate-500">({h.changed_by_name ?? "system"})</span></li>

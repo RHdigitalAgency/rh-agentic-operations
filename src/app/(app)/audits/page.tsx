@@ -4,16 +4,18 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { AUDIT_STATUSES, listAudits } from "@/server/audits";
 import { Empty, fmtDate, Money, PageHeader, StatusBadge } from "@/components/ui";
 
+export const metadata = { title: "Audits" };
+
 export default async function AuditsPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
   const audits = await load(listAudits(ctx, { status: p.status }));
   return (
     <div>
-      <PageHeader title="Audits" subtitle="Paid Agentic Operations Audits — create them from a qualified opportunity" />
-      <div className="mb-3 flex flex-wrap gap-1">
-        <Link href="/audits" className={`btn hover:no-underline ${!p.status ? "btn-primary" : ""}`}>All</Link>
-        {AUDIT_STATUSES.map((s) => <Link key={s} href={`/audits?status=${s}`} className={`btn hover:no-underline ${p.status === s ? "btn-primary" : ""}`}>{s.replace("_", " ").toLowerCase()}</Link>)}
+      <PageHeader eyebrow="Audit engine" title="Audits" subtitle="Paid Agentic Operations Audits — create them from a qualified opportunity" />
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        <Link href="/audits" className={`chip ${!p.status ? "chip-active" : ""}`}>All</Link>
+        {AUDIT_STATUSES.map((s) => <Link key={s} href={`/audits?status=${s}`} className={`chip ${p.status === s ? "chip-active" : ""}`}>{s.replace("_", " ").toLowerCase()}</Link>)}
       </div>
       {audits.length === 0 ? <Empty>No audits.</Empty> : (
         <div className="card overflow-x-auto p-0">

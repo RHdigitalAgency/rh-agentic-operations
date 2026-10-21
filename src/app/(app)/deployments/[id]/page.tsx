@@ -5,8 +5,12 @@ import {
 } from "@/app/actions";
 import { DEPLOYMENT_STATUSES, getDeploymentWorkspace, type AgentRoleRow } from "@/server/deployments";
 import { listActiveUsers } from "@/server/crm";
-import { Badge, Card, Empty, Field, fmtDate, fmtNum, fmtPct, Hidden, Money, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Badge, Card, Empty, Field, fmtDate, fmtNum, fmtPct, Hidden, Money, PageHeader, Stat, StatusBadge, Stepper, type Step } from "@/components/ui";
+import { BarChart3, Bot, Clock, Coins, FileText, Gauge, ShieldCheck, Target, TestTube2, TrendingUp, TriangleAlert } from "lucide-react";
 import { SubmitButton } from "@/components/SubmitButton";
+import { formatCents } from "@/domain/money";
+
+export const metadata = { title: "Deployment" };
 
 function RoleForm({ deploymentId, role, template }: { deploymentId: string; role?: AgentRoleRow; template: string | null }) {
   return (
@@ -32,6 +36,18 @@ function RoleForm({ deploymentId, role, template }: { deploymentId: string; role
   );
 }
 
+const FLOW = [["PLANNED", "Planned"], ["BUILD", "Build"], ["QA", "QA"], ["LAUNCHED", "Launched"], ["MONITORING", "Monitoring"], ["COMPLETED", "Completed"]] as const;
+
+function deliverySteps(status: string, launchDate: string | null): Step[] {
+  if (status === "CANCELLED") return FLOW.map(([, label]) => ({ label, state: "blocked" as const, hint: "cancelled" }));
+  const cur = FLOW.findIndex(([code]) => code === status);
+  return FLOW.map(([code, label], i) => ({
+    label,
+    state: status === "PAUSED" ? "todo" : i < cur || status === "COMPLETED" ? "done" : i === cur ? "current" : "todo",
+    hint: code === "LAUNCHED" && launchDate ? fmtDate(launchDate) : status === "PAUSED" && i === 0 ? "paused" : undefined,
+  }));
+}
+
 export default async function DeploymentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireCtx();
@@ -42,8 +58,9 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
   const w = ws.canWrite;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
+        eyebrow="Deployment"
         title={<>{d.name} <StatusBadge status={d.status} /></>}
         subtitle={<>
           <Link href={`/companies/${d.company_id}`}>{d.company_name}</Link>
@@ -63,22 +80,28 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
         ) : null}
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Stat label="Contract value" value={ws.financials ? <Money cents={ws.financials.revenueCents} currency={cur} /> : "Restricted"} />
-        <Stat label="Hours" value={fmtNum(d.hours)} />
-        <Stat label="Delivery cost" value={ws.financials ? <Money cents={ws.financials.deliveryCostCents} currency={cur} /> : "Restricted"} hint={ws.financials ? `incl. direct ${(d.direct_cost_cents / 100).toFixed(0)} + hours × ${(ws.financials.internalHourlyCostCents / 100).toFixed(0)}/h` : undefined} />
-        <Stat label="Gross margin" value={ws.financials ? fmtPct(ws.financials.grossMargin) : "Restricted"} />
-        <Stat label="Client ROI (measured)" value={ws.financials?.clientRoi ? `${fmtNum(ws.financials.clientRoi, 2)}×` : "—"} hint={ws.financials?.monthlyBenefitCents ? `benefit ${(ws.financials.monthlyBenefitCents / 100).toFixed(0)}/mo` : undefined} />
+      <Stepper steps={deliverySteps(d.status, d.launch_date)} />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <Stat icon={Coins} label="Contract value" value={ws.financials ? <Money cents={ws.financials.revenueCents} currency={cur} /> : "Restricted"} />
+        <Stat icon={Clock} label="Hours" value={fmtNum(d.hours)} />
+        <Stat icon={BarChart3} label="Delivery cost" value={ws.financials ? <Money cents={ws.financials.deliveryCostCents} currency={cur} /> : "Restricted"} hint={ws.financials ? `${formatCents(d.direct_cost_cents, cur)} direct + ${fmtNum(d.hours)} h × ${formatCents(ws.financials.internalHourlyCostCents, cur)}/h` : undefined} />
+        <Stat icon={Gauge} label="Gross margin" value={ws.financials ? fmtPct(ws.financials.grossMargin) : "Restricted"} />
+        <Stat accent icon={TrendingUp} label="Client ROI (measured)" value={ws.financials?.clientRoi ? `${fmtNum(ws.financials.clientRoi, 2)}×` : "—"} hint={ws.financials?.monthlyBenefitCents ? `${formatCents(ws.financials.monthlyBenefitCents, cur)}/mo measured benefit` : undefined} />
       </div>
 
       {ws.readiness.length && ["PLANNED", "BUILD", "QA"].includes(d.status) ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <b>Launch readiness:</b>
-          <ul className="ml-5 list-disc">{ws.readiness.map((r) => <li key={r}>{r}</li>)}</ul>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+          <div className="flex items-center gap-2 font-semibold"><TriangleAlert className="size-4" aria-hidden /> Before this deployment can launch</div>
+          <ul className="mt-2 space-y-1">
+            {ws.readiness.map((r) => (
+              <li key={r} className="flex items-start gap-2"><span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden />{r}</li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
-      <Card title="Scope, schedule & reusability">
+      <Card icon={Target} title="Scope, schedule & reusability">
         <form action={updateDeploymentAction}>
           <Hidden name="id" value={id} />
           <fieldset disabled={!w} className="grid gap-3 md:grid-cols-4">
@@ -110,14 +133,14 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
         </form>
       </Card>
 
-      <Card title="Agent roles & human controls">
+      <Card icon={Bot} title="Agent roles & human controls">
         {ws.roles.length === 0 ? <Empty>No agent roles defined.</Empty> : (
           <div className="space-y-3">
             {ws.roles.map((r) => (
               <details key={r.id} className="rounded-md border border-slate-200 p-3">
                 <summary className="cursor-pointer">
                   <b>{r.name}</b> — {r.responsibility}{" "}
-                  {r.gaps.length ? <Badge tone="amber">missing: {r.gaps.join(", ")}</Badge> : <Badge tone="green">control model complete</Badge>}
+                  {r.gaps.length ? <Badge tone="amber">missing: {r.gaps.join(", ")}</Badge> : <Badge tone="green"><ShieldCheck className="mr-1 size-3" aria-hidden />control model complete</Badge>}
                   {r.provider ? <> <Badge>{r.provider}</Badge></> : null}
                 </summary>
                 <div className="mt-2 grid gap-2 text-sm md:grid-cols-2">
@@ -142,7 +165,7 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="QA & rollback readiness">
+        <Card icon={TestTube2} title="QA & rollback readiness">
           {ws.qa.length === 0 ? <Empty>No test cases.</Empty> : (
             <ul className="space-y-2">
               {ws.qa.map((q) => (
@@ -172,7 +195,7 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
           ) : null}
         </Card>
 
-        <Card title="Effort — hours & direct cost">
+        <Card icon={Clock} title="Effort — hours & direct cost">
           {w ? (
             <form action={addEffortAction} className="mb-3 grid gap-2 md:grid-cols-5">
               <Hidden name="deployment_id" value={id} />
@@ -194,7 +217,7 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
         </Card>
       </div>
 
-      <Card title="Performance — baseline vs target vs result">
+      <Card icon={TrendingUp} title="Performance — baseline vs target vs result">
         {ws.comparison.length === 0 ? <Empty>Capture a baseline before launch so ROI can be demonstrated afterwards.</Empty> : (
           <table className="table">
             <thead><tr><th>Metric</th><th className="text-right">Baseline</th><th className="text-right">Target</th><th className="text-right">Latest result</th><th className="text-right">Change</th><th>Result window</th></tr></thead>
@@ -226,7 +249,7 @@ export default async function DeploymentPage({ params }: { params: Promise<{ id:
         ) : null}
       </Card>
 
-      <Card title="Case-study narrative">
+      <Card icon={FileText} title="Case-study narrative">
         <form action={updateDeploymentAction}>
           <Hidden name="id" value={id} /><Hidden name="_back" value={`/deployments/${id}`} />
           {(["name", "scope_included", "scope_excluded", "integrations", "start_date", "end_date", "launch_version", "monitoring_until", "reusable_assets_notes"] as const).map((k) => (

@@ -4,6 +4,8 @@ import { getDeploymentWorkspace } from "@/server/deployments";
 import { Badge, fmtDate, fmtNum, fmtPct } from "@/components/ui";
 import { formatCents } from "@/domain/money";
 
+export const metadata = { title: "Case study" };
+
 /** Internal one-page case-study summary generated from delivery records (not for public use without approval). */
 export default async function CaseStudyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

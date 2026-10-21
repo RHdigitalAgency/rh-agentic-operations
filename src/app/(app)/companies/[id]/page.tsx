@@ -8,6 +8,8 @@ import { Badge, Card, Empty, fmtDate, fmtDateTime, fmtNum, fmtPct, Hidden, Money
 import { SubmitButton } from "@/components/SubmitButton";
 import { CompanyFields } from "../CompanyFields";
 
+export const metadata = { title: "Company" };
+
 export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireCtx();
@@ -21,8 +23,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   const regulated = ref.verticals.find((v) => v.code === company.vertical)?.regulated;
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div className="space-y-6">
+      <PageHeader eyebrow="Account"
         title={<>{company.name} {regulated ? <Badge tone="amber">regulated vertical · admin-only scope</Badge> : null}</>}
         subtitle={`${ref.verticals.find((v) => v.code === company.vertical)?.name ?? "No vertical"} · owner ${company.owner_name ?? "—"} · source ${company.source ?? "—"}`}
       />

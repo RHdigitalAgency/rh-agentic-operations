@@ -6,6 +6,8 @@ import { listActiveUsers, listCompanies, listReference } from "@/server/crm";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 
+export const metadata = { title: "New lead" };
+
 export default async function NewLeadPage() {
   const ctx = await requireCtx();
   if (!can(ctx.user, "crm.write")) notFound();
@@ -13,7 +15,7 @@ export default async function NewLeadPage() {
   const isSales = ctx.user.role === "SALES_REP";
   return (
     <div className="max-w-3xl">
-      <PageHeader title="New lead" subtitle="Manual entry. Instagram and website leads arrive automatically through the ingestion API." />
+      <PageHeader eyebrow="Sales" title="New lead" subtitle="Manual entry. Instagram and website leads arrive automatically through the ingestion API." />
       <form action={createLeadAction} className="space-y-4">
         <Card title="Company">
           <div className="grid gap-3 md:grid-cols-2">

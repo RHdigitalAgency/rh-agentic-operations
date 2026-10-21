@@ -8,6 +8,8 @@ import { STAGES, STAGE_LABELS } from "@/domain/pipeline";
 import { Badge, Card, centsInput, Field, fmtDateTime, Hidden, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 
+export const metadata = { title: "Settings" };
+
 export default async function SettingsPage() {
   const ctx = await requireCtx();
   const [users, weightSets, settings, ref, log] = await load(Promise.all([
@@ -15,8 +17,8 @@ export default async function SettingsPage() {
   ]));
   const active = weightSets.find((w) => w.active);
   return (
-    <div className="space-y-4">
-      <PageHeader title="Settings" subtitle="Users & roles, scoring weights, economics and reference data (admin only)" />
+    <div className="space-y-6">
+      <PageHeader eyebrow="Administration" title="Settings" subtitle="Users & roles, scoring weights, economics and reference data (admin only)" />
 
       <Card title="Users & roles">
         <div className="overflow-x-auto">
