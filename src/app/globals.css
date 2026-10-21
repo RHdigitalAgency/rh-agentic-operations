@@ -1,57 +1,101 @@
 @import "tailwindcss";
 
+/*
+ * RH Digital Agency design system (assets/branding/branding complementario RH.png).
+ * 70% cool neutrals · 20% brand blue · 10% accents. Orange is reserved for calls to action.
+ */
 @theme {
-  --color-brand-50: #eef5ff;
-  --color-brand-100: #d9e8ff;
-  --color-brand-600: #1f5fd1;
-  --color-brand-700: #184ba6;
-  --color-ink: #0f172a;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-condensed), "Arial Narrow", ui-sans-serif, sans-serif;
+
+  --color-navy: #042969; /* RH Navy: authority, sidebar, deep backgrounds */
+  --color-navy-900: #031d4a;
+  --color-rh: #135bb8; /* RH Blue: primary brand color, buttons, charts */
+  --color-signal: #0870e0; /* Signal Blue: highlights, active states */
+  --color-cyan: #06acec; /* Bright Cyan: gradients, progress, details */
+  --color-cta: #f56035; /* CTA Orange: calls to action only */
+  --color-cta-600: #e04a1f;
+  --color-mist: #eef3f9; /* cool neutral backgrounds */
+  --color-frost: #dce8f4; /* cool neutral borders */
+
+  /* Legacy aliases used across pages, remapped to the brand. */
+  --color-brand-50: #eef3f9;
+  --color-brand-100: #dce8f4;
+  --color-brand-600: #135bb8;
+  --color-brand-700: #0f4a97;
 }
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-mist font-sans text-slate-800 antialiased;
   }
   h1 {
-    @apply text-xl font-semibold tracking-tight;
+    @apply font-display text-2xl leading-tight font-bold tracking-wide text-navy uppercase;
   }
   h2 {
-    @apply text-base font-semibold;
+    @apply font-display text-[15px] font-bold tracking-wider text-navy uppercase;
+  }
+  h3 {
+    @apply font-semibold text-slate-800;
   }
   a {
-    @apply text-brand-700 hover:underline;
+    @apply text-rh hover:text-signal hover:underline;
+  }
+  ::selection {
+    @apply bg-cyan/25;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-lg border border-slate-200 bg-white p-4 shadow-sm;
+    @apply rounded-xl border border-frost bg-white p-5 shadow-[0_1px_2px_rgba(4,41,105,0.04)];
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-[0.18em] text-cyan uppercase;
   }
   .label {
     @apply mb-1 block text-xs font-medium text-slate-600;
   }
   .input {
-    @apply w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm shadow-xs focus:border-brand-600 focus:ring-2 focus:ring-brand-100 focus:outline-none;
+    @apply w-full rounded-lg border border-frost bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-signal focus:ring-3 focus:ring-signal/15 focus:outline-none disabled:bg-mist disabled:text-slate-500;
   }
   .btn {
-    @apply inline-flex cursor-pointer items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-frost bg-white px-3.5 py-2 text-sm font-medium text-navy transition-colors hover:border-rh/40 hover:bg-mist hover:no-underline disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-brand-600 bg-brand-600 text-white hover:bg-brand-700;
+    @apply border-rh bg-rh text-white hover:border-signal hover:bg-signal hover:text-white;
+  }
+  .btn-cta {
+    @apply border-cta bg-cta text-white shadow-[0_4px_14px_rgba(245,96,53,0.25)] hover:border-cta-600 hover:bg-cta-600 hover:text-white;
   }
   .btn-danger {
-    @apply border-red-300 text-red-700 hover:bg-red-50;
+    @apply border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent shadow-none hover:bg-mist;
   }
   .table {
     @apply w-full text-left text-sm;
   }
   .table th {
-    @apply border-b border-slate-200 px-2 py-1.5 text-xs font-medium tracking-wide text-slate-500 uppercase;
+    @apply border-b border-frost px-3 py-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase;
   }
   .table td {
-    @apply border-b border-slate-100 px-2 py-1.5 align-top;
+    @apply border-b border-mist px-3 py-2.5 align-top;
+  }
+  .table tbody tr:hover td {
+    @apply bg-mist/60;
   }
   .muted {
     @apply text-sm text-slate-500;
+  }
+  .brand-gradient {
+    background-image: linear-gradient(120deg, #042969 0%, #135bb8 55%, #06acec 100%);
+  }
+  details > summary {
+    @apply list-none;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
   }
 }

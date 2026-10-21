@@ -17,3 +17,6 @@ next-env.d.ts
 !.env.example
 *.zip
 .claude/settings.local.json
+
+# Brand source files (copies used by the app live in public/brand)
+assets/

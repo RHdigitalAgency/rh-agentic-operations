@@ -15,5 +15,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|paid|api|_next/static|_next/image|favicon.ico).*)"],
+  // Public: login, Stripe return page, APIs (own auth), build assets, brand images and app icons.
+  matcher: ["/((?!login|paid|api|_next/static|_next/image|brand/|favicon.ico|icon|apple-icon).*)"],
 };

@@ -4,22 +4,38 @@ import { readParams, type SearchParams } from "@/lib/params";
 import { listActiveUsers, listOpportunities, listReference, type OpportunityRow } from "@/server/crm";
 import { OPEN_STAGES, STAGE_LABELS } from "@/domain/pipeline";
 import { formatCents } from "@/domain/money";
-import { Badge, Empty, fmtDate, PageHeader, StageBadge } from "@/components/ui";
+import { Empty, fmtDate, PageHeader, StageBadge } from "@/components/ui";
 
-function OppCard({ o }: { o: OpportunityRow }) {
-  const overdue = o.next_action_at && new Date(o.next_action_at) < new Date();
+const initials = (name: string | null) =>
+  (name ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]!.toUpperCase()).join("");
+
+function OppCard({ o, now }: { o: OpportunityRow; now: number }) {
+  const overdue = o.next_action_at && new Date(o.next_action_at).getTime() < now;
+  const days = Math.max(0, Math.floor((now - new Date(o.stage_changed_at).getTime()) / 86400000));
   return (
-    <Link href={`/opportunities/${o.id}`} className="block rounded-md border border-slate-200 bg-white p-2 text-sm shadow-xs hover:border-brand-600 hover:no-underline">
-      <div className="font-medium text-slate-900">{o.company_name}</div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
-        <span className="tabular-nums">{formatCents(o.estimated_value_cents, o.currency)}</span>·<span>{o.owner_name ?? "Unassigned"}</span>
-        {o.source ? <Badge>{o.source}</Badge> : null}
+    <Link
+      href={`/opportunities/${o.id}`}
+      className={`block rounded-lg border bg-white p-3 text-sm shadow-[0_1px_2px_rgba(4,41,105,0.05)] transition hover:-translate-y-px hover:border-rh/40 hover:shadow-md hover:no-underline ${overdue ? "border-l-[3px] border-red-300 border-l-red-500" : "border-frost"}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 font-semibold leading-snug text-navy">{o.company_name}</div>
+        <span title={o.owner_name ?? "Unassigned"} className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${o.owner_name ? "bg-rh text-white" : "bg-mist text-slate-400"}`}>
+          {o.owner_name ? initials(o.owner_name) : "–"}
+        </span>
       </div>
-      {o.next_action ? (
-        <div className={`mt-1 text-xs ${overdue ? "font-medium text-red-600" : "text-slate-600"}`}>
-          → {o.next_action} {o.next_action_at ? `(${fmtDate(o.next_action_at)})` : ""}
-        </div>
-      ) : <div className="mt-1 text-xs text-amber-700">No next action</div>}
+      <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+        {o.estimated_value_cents === null ? <span className="text-slate-400">No value yet</span> : <span className="font-display text-base font-bold tabular-nums text-navy">{formatCents(o.estimated_value_cents, o.currency)}</span>}
+        {o.source ? <span className="truncate">· {o.source.replace(/_/g, " ")}</span> : null}
+      </div>
+      <div className="mt-2 border-t border-mist pt-2 text-xs">
+        {o.next_action ? (
+          <div className={`flex items-start gap-1 ${overdue ? "font-medium text-red-600" : "text-slate-600"}`}>
+            <span aria-hidden>{overdue ? "⚠" : "→"}</span>
+            <span className="min-w-0">{o.next_action}{o.next_action_at ? <span className="text-slate-400"> · {fmtDate(o.next_action_at)}</span> : null}</span>
+          </div>
+        ) : <div className="font-medium text-amber-700">No next action set</div>}
+        <div className="mt-1 text-[11px] text-slate-400">{days === 0 ? "Entered stage today" : `${days} day${days === 1 ? "" : "s"} in stage`}</div>
+      </div>
     </Link>
   );
 }
@@ -27,6 +43,7 @@ function OppCard({ o }: { o: OpportunityRow }) {
 export default async function PipelinePage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
+  const now = new Date().getTime();
   const view = (["open", "won", "lost", "all"].includes(p.view ?? "") ? p.view : "open") as "open" | "won" | "lost" | "all";
   const [opps, ref, users] = await load(Promise.all([
     listOpportunities(ctx, { view, ownerId: p.owner, source: p.source, vertical: p.vertical, q: p.q }),
@@ -44,6 +61,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Sea
   return (
     <div>
       <PageHeader
+        eyebrow="Sales"
         title="Pipeline"
         subtitle={`${opps.length} opportunit${opps.length === 1 ? "y" : "ies"} · total ${formatCents(opps.reduce((s, o) => s + (o.currency === "USD" ? o.estimated_value_cents ?? 0 : 0), 0), "USD")}`}
         actions={
@@ -83,13 +101,17 @@ export default async function PipelinePage({ searchParams }: { searchParams: Sea
           {OPEN_STAGES.map((stage) => {
             const col = opps.filter((o) => o.stage === stage);
             return (
-              <div key={stage} className="w-60 shrink-0">
-                <div className="mb-2 flex items-baseline justify-between">
-                  <h2 className="text-sm">{STAGE_LABELS[stage]}</h2>
-                  <span className="text-xs text-slate-500 tabular-nums">{col.length} · {formatCents(col.reduce((s, o) => s + (o.estimated_value_cents ?? 0), 0), "USD")}</span>
+              <div key={stage} className="flex w-64 shrink-0 flex-col">
+                <div className="mb-2 rounded-lg border border-frost bg-white px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="truncate text-[13px]">{STAGE_LABELS[stage]}</h2>
+                    <span className="rounded-full bg-mist px-2 py-0.5 text-[11px] font-semibold text-navy tabular-nums">{col.length}</span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-500 tabular-nums">{formatCents(col.reduce((s, o) => s + (o.estimated_value_cents ?? 0), 0), "USD")}</div>
+                  <div className="mt-2 h-0.5 rounded-full brand-gradient" style={{ opacity: 0.25 + (OPEN_STAGES.indexOf(stage) / OPEN_STAGES.length) * 0.75 }} />
                 </div>
-                <div className="space-y-2 rounded-lg bg-slate-100 p-2">
-                  {col.length ? col.map((o) => <OppCard key={o.id} o={o} />) : <div className="py-4 text-center text-xs text-slate-400">Empty</div>}
+                <div className="flex-1 space-y-2 rounded-lg bg-frost/40 p-2">
+                  {col.length ? col.map((o) => <OppCard key={o.id} o={o} now={now} />) : <div className="py-6 text-center text-xs text-slate-400">No deals</div>}
                 </div>
               </div>
             );

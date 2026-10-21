@@ -1,25 +1,34 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { formatCents } from "@/domain/money";
 import { STAGE_LABELS, type Stage } from "@/domain/pipeline";
 
-export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, eyebrow }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
   return (
-    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1>{title}</h1>
-        {subtitle ? <p className="muted mt-0.5">{subtitle}</p> : null}
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        {eyebrow ? <div className="eyebrow mb-1">{eyebrow}</div> : null}
+        <h1 className="flex flex-wrap items-center gap-2">{title}</h1>
+        {subtitle ? <p className="muted mt-1">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
 
-export function Card({ title, children, actions, className = "" }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string }) {
+export function Card({ title, children, actions, className = "", icon: Icon }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string; icon?: LucideIcon }) {
   return (
     <section className={`card ${className}`}>
       {title || actions ? (
-        <div className="mb-3 flex items-center justify-between gap-2">
-          {title ? <h2>{title}</h2> : <span />}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          {title ? (
+            <h2 className="flex items-center gap-2">
+              {Icon ? <Icon className="size-4 text-rh" aria-hidden /> : null}
+              {title}
+            </h2>
+          ) : (
+            <span />
+          )}
           {actions}
         </div>
       ) : null}
@@ -29,25 +38,36 @@ export function Card({ title, children, actions, className = "" }: { title?: Rea
 }
 
 const TONES = {
-  gray: "bg-slate-100 text-slate-700",
-  blue: "bg-blue-50 text-blue-700",
-  green: "bg-emerald-50 text-emerald-700",
-  amber: "bg-amber-50 text-amber-800",
-  red: "bg-red-50 text-red-700",
-  purple: "bg-violet-50 text-violet-700",
+  gray: "bg-slate-100 text-slate-600 ring-slate-200",
+  blue: "bg-signal/8 text-signal ring-signal/20",
+  green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  amber: "bg-amber-50 text-amber-800 ring-amber-200",
+  red: "bg-red-50 text-red-700 ring-red-200",
+  purple: "bg-navy/6 text-navy ring-navy/15",
+  cyan: "bg-cyan/10 text-[#0582b3] ring-cyan/25",
+  orange: "bg-cta/10 text-cta-600 ring-cta/25",
 } as const;
+export type Tone = keyof typeof TONES;
 
-export function Badge({ children, tone = "gray" }: { children: ReactNode; tone?: keyof typeof TONES }) {
-  return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${TONES[tone]}`}>{children}</span>;
+export function Badge({ children, tone = "gray" }: { children: ReactNode; tone?: Tone }) {
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ring-1 ring-inset ${TONES[tone]}`}>{children}</span>;
+}
+
+export function stageTone(stage: Stage): Tone {
+  if (stage === "LOST_NURTURE") return "red";
+  if (stage.startsWith("WON")) return "green";
+  if (stage === "PROPOSAL_SENT") return "orange";
+  if (stage.startsWith("AUDIT")) return "purple";
+  if (stage === "FIT_QUALIFIED" || stage === "FIT_CALL_BOOKED") return "cyan";
+  return "blue";
 }
 
 export function StageBadge({ stage }: { stage: Stage }) {
-  const tone = stage === "LOST_NURTURE" ? "red" : stage.startsWith("WON") ? "green" : stage.startsWith("AUDIT") || stage === "PROPOSAL_SENT" ? "purple" : "blue";
-  return <Badge tone={tone}>{STAGE_LABELS[stage] ?? stage}</Badge>;
+  return <Badge tone={stageTone(stage)}>{STAGE_LABELS[stage] ?? stage}</Badge>;
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const tone: keyof typeof TONES =
+  const tone: Tone =
     ["ACCEPTED", "PASSED", "PRESENTED", "LAUNCHED", "MONITORING", "COMPLETED", "ACTIVE", "PAID", "APPROVED"].includes(status) ? "green"
     : ["REJECTED", "FAILED", "CANCELLED", "WITHDRAWN", "DENIED"].includes(status) ? "red"
     : ["PENDING", "PAUSED", "OFFERED", "DRAFT"].includes(status) ? "amber"
@@ -60,7 +80,7 @@ export function Money({ cents, currency = "USD" }: { cents: number | null | unde
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">{children}</div>;
+  return <div className="rounded-lg border border-dashed border-frost bg-mist/50 px-4 py-6 text-center text-sm text-slate-500">{children}</div>;
 }
 
 export function Field({ label, children, hint, className = "" }: { label: string; children: ReactNode; hint?: ReactNode; className?: string }) {
@@ -68,24 +88,31 @@ export function Field({ label, children, hint, className = "" }: { label: string
     <label className={`block ${className}`}>
       <span className="label">{label}</span>
       {children}
-      {hint ? <span className="mt-0.5 block text-xs text-slate-500">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-xs text-slate-500">{hint}</span> : null}
     </label>
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
+export function Stat({ label, value, hint, icon: Icon, accent = false }: { label: string; value: ReactNode; hint?: ReactNode; icon?: LucideIcon; accent?: boolean }) {
   return (
-    <div className="card p-3">
-      <div className="text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      {hint ? <div className="mt-0.5 text-xs text-slate-500">{hint}</div> : null}
+    <div className={`card relative overflow-hidden p-4 ${accent ? "border-transparent text-white brand-gradient" : ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className={`text-[11px] font-semibold tracking-wider uppercase ${accent ? "text-white/75" : "text-slate-500"}`}>{label}</div>
+        {Icon ? (
+          <span className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${accent ? "bg-white/15 text-white" : "bg-mist text-rh"}`}>
+            <Icon className="size-3.5" aria-hidden />
+          </span>
+        ) : null}
+      </div>
+      <div className={`mt-2 font-display text-[28px] leading-none font-bold tabular-nums ${accent ? "text-white" : "text-navy"}`}>{value}</div>
+      {hint ? <div className={`mt-1.5 text-xs ${accent ? "text-white/75" : "text-slate-500"}`}>{hint}</div> : null}
     </div>
   );
 }
 
 export function KV({ items }: { items: [string, ReactNode][] }) {
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+    <dl className="grid grid-cols-[max-content_1fr] gap-x-5 gap-y-2 text-sm">
       {items.map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-slate-500">{k}</dt>
