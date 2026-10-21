@@ -36,10 +36,78 @@ Set `DATABASE_URL` to use real Postgres/Supabase instead. See `docs/11_DEPLOYMEN
 Lead (**+ New lead**, or ingested) → move to Contacted → schedule and complete a **fit call** → **Offer audit** → **Confirm payment** → **Start discovery** → add **processes**, classify, **score** → **ROI scenario** → add an **agentic opportunity** → **Recommend as pilot** → **Mark presented** → **Create proposal** → **Mark as sent** → **Accept → create deployment** → agent roles, QA, effort, **baseline/result KPIs** → **Dashboard** and **case-study summary**.
 Stages advance automatically when each step's exit condition is met; manual moves are validated against the same rules.
 
-### Lead ingestion API (for Instagram Growth Automation, website forms)
-`POST /api/integrations/leads` with the JSON contract from `docs/06_API_SPEC.md` (optional `utm` object and `referrer`).
-Authenticate with `x-rh-signature: sha256=<hex HMAC-SHA256 of the raw body using INSTAGRAM_INGESTION_SHARED_SECRET>` (preferred) or `x-rh-ingestion-secret: <secret>`.
-Responses: `201 {data:{opportunity_id, duplicate:false}}`, replay `200 {…duplicate:true}`, `400` validation, `401` bad signature, `429` rate limit, `503` not configured.
+### Lead ingestion API (for the Instagram Growth Automation, website forms)
+
+The Instagram automation is a separate project and is **not connected yet**. This endpoint is ready for it. Until then, leads are entered with **+ New lead**, or simulated with `npm run lead:simulate`.
+
+**Request**
+
+```
+POST https://rh-agentic-operations.vercel.app/api/integrations/leads
+Content-Type: application/json
+x-rh-signature: sha256=<lowercase hex HMAC-SHA256 of the exact raw request body, keyed with the shared secret>
+```
+
+```json
+{
+  "external_event_id": "ig-comment-17890012345",
+  "source": "instagram_organic",
+  "campaign": "agentic_operations",
+  "post": "reel_2026_10_20_01",
+  "keyword": "AGENTES",
+  "instagram_username": "casa_verde_landscaping",
+  "name": "Mariela Torres",
+  "email": "mariela@casaverde.example.com",
+  "phone": "+1 305 555 0199",
+  "notes": "Asked about automating quote follow-ups.",
+  "created_at": "2026-10-20T14:32:00Z"
+}
+```
+
+| Field | Required | Rules | Stored as |
+|---|---|---|---|
+| `source` | **yes** | 1–80 chars, lower-cased | Opportunity source |
+| `external_event_id` | strongly recommended | ≤200 chars, unique per event | Idempotency key: a resend returns the same lead |
+| `campaign` | no | ≤120 | Campaign |
+| `post` | no | ≤200 (post/reel ID or URL) | Content / post |
+| `keyword` | no | ≤80 | Keyword |
+| `instagram_username` | no | ≤100, leading `@` is stripped | Contact Instagram handle |
+| `name` | no | ≤200 | Contact name |
+| `email` | no | valid email | Contact email |
+| `phone` | no | ≤40 | Contact phone |
+| `notes` | no | ≤2000 | Note on the lead's activity timeline |
+| `created_at` | no | ISO 8601 with timezone, not in the future | Lead creation time (defaults to receipt time) |
+
+Optional extras: `utm` (object of strings) and `referrer`. The nested shape in `docs/06_API_SPEC.md` (`content_id`, `contact{}`, `company{}`) is also accepted.
+
+An existing contact with the same email, Instagram username or phone is reused. Every event still creates its own attributed lead, and new leads go to the default lead owner set in **Settings**.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `201` | `{"data":{"opportunity_id":"…","duplicate":false}}`: lead created |
+| `200` | `{"data":{"opportunity_id":"…","duplicate":true}}`: same `external_event_id` already received; nothing created |
+| `400` | Malformed JSON or invalid fields: `{"error":{"code":"VALIDATION","message":"…"}}` |
+| `401` | Missing or wrong `x-rh-signature` (unsigned requests are always rejected) |
+| `413` | Body over 64 KB |
+| `429` | Rate limit (60 requests/minute per IP) |
+| `503` | `INSTAGRAM_INGESTION_SHARED_SECRET` not configured on that environment |
+
+**Signing example (Node.js).** Sign exactly the bytes you send:
+
+```js
+const body = JSON.stringify(lead);
+const signature = "sha256=" + require("crypto").createHmac("sha256", process.env.RH_SHARED_SECRET).update(body).digest("hex");
+await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-rh-signature": signature }, body });
+```
+
+**Secret.** Configured per environment with `INSTAGRAM_INGESTION_SHARED_SECRET`: in `.env.local` locally, and in the Vercel project settings in production. Share it with the Instagram team privately (never in code or chat logs). Rotating it means updating both sides.
+
+**Simulate without the external system.** With `npm run dev` running and the secret in `.env.local`:
+- `npm run lead:simulate` sends `tests/fixtures/instagram-lead.json` with a fresh event ID.
+- `npm run lead:simulate -- --replay` keeps the fixture's ID, so a second run shows the duplicate response.
+- Add `--url https://…` to target another environment, and `--file path.json` for a custom payload.
 
 ## Source of truth
 

@@ -6,6 +6,8 @@ import { insertOpportunity } from "./crm";
 import { logAudit } from "./context";
 import { getDefaultLeadOwner } from "./settings";
 
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
 const trimmed = (max: number) => z.string().trim().max(max).transform((v) => (v === "" ? null : v));
 const opt = (max: number) => trimmed(max).nullish().transform((v) => v ?? null);
 
@@ -27,33 +29,66 @@ export const LeadEventSchema = z.object({
     })
     .nullish(),
   company: z.object({ name: opt(200), website: opt(500) }).nullish(),
+  notes: opt(2000),
+  /** When the lead happened at the source (e.g. the Instagram comment). ISO 8601. Defaults to receipt time. */
+  created_at: z
+    .string()
+    .datetime({ offset: true })
+    .nullish()
+    .transform((v) => (v ? new Date(v) : null))
+    .refine((d) => !d || d.getTime() <= Date.now() + MAX_CLOCK_SKEW_MS, "must not be in the future"),
   metadata: z.record(z.string(), z.unknown()).nullish(),
 });
 export type LeadEvent = z.infer<typeof LeadEventSchema>;
+
+/** Flat field names used by the Instagram Growth Automation, mapped onto the canonical (nested) contract. */
+const FLAT_FIELDS = ["post", "instagram_username", "name", "email", "phone"] as const;
+
+/**
+ * Accepts both payload shapes:
+ *  - flat (Instagram):  { source, campaign, post, keyword, instagram_username, name, email, phone, notes, created_at, external_event_id }
+ *  - nested (canonical): { source, campaign, content_id, keyword, contact: {...}, company: {...}, ... }
+ * Explicit nested values win over flat aliases.
+ */
+export function normalizeLeadPayload(body: unknown): unknown {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return body;
+  const b = body as Record<string, unknown>;
+  if (!FLAT_FIELDS.some((k) => k in b)) return body;
+  const { post, instagram_username, name, email, phone, ...rest } = b;
+  const contact = (typeof b.contact === "object" && b.contact !== null ? b.contact : {}) as Record<string, unknown>;
+  return {
+    ...rest,
+    content_id: rest.content_id ?? post,
+    contact: {
+      name: contact.name ?? name,
+      instagram_handle: contact.instagram_handle ?? instagram_username,
+      email: contact.email ?? email,
+      phone: contact.phone ?? phone,
+    },
+  };
+}
 
 export interface IngestResult {
   opportunityId: string;
   duplicate: boolean;
 }
 
+/** `x-rh-signature: sha256=<hex HMAC-SHA256 of the exact raw request body>` signed with the shared secret. */
+export function signLeadPayload(rawBody: string, secret: string): string {
+  return `sha256=${createHmac("sha256", secret).update(rawBody).digest("hex")}`;
+}
+
+/** Only signed requests are accepted; unsigned requests and wrong signatures are rejected. */
 export function verifyIngestionAuth(rawBody: string, headers: Headers, secret: string | undefined): boolean {
-  if (!secret) return false;
-  const eq = (a: string, b: string) => {
-    const ba = Buffer.from(a);
-    const bb = Buffer.from(b);
-    return ba.length === bb.length && timingSafeEqual(ba, bb);
-  };
   const signature = headers.get("x-rh-signature");
-  if (signature) {
-    const expected = `sha256=${createHmac("sha256", secret).update(rawBody).digest("hex")}`;
-    return eq(signature, expected);
-  }
-  const shared = headers.get("x-rh-ingestion-secret");
-  return Boolean(shared) && eq(shared!, secret);
+  if (!secret || !signature) return false;
+  const a = Buffer.from(signature);
+  const b = Buffer.from(signLeadPayload(rawBody, secret));
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export function parseLeadEvent(body: unknown): LeadEvent {
-  const r = LeadEventSchema.safeParse(body);
+  const r = LeadEventSchema.safeParse(normalizeLeadPayload(body));
   if (!r.success) throw new ValidationError(r.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
   return r.data;
 }
@@ -135,6 +170,18 @@ export async function ingestLead(db: Db, event: LeadEvent, provider = "lead_inge
       },
       `integration:${provider}`,
     );
+
+    // Keep the real lead time from the source so sales-cycle metrics start when the lead actually happened.
+    if (event.created_at) {
+      await tx.query("update opportunities set created_at = $2, stage_changed_at = $2 where id = $1", [opportunityId, event.created_at]);
+      await tx.query("update opportunity_stage_history set changed_at = $2 where opportunity_id = $1 and from_stage is null", [opportunityId, event.created_at]);
+    }
+    if (event.notes) {
+      await tx.query(
+        "insert into activities(opportunity_id, company_id, activity_type, notes, occurred_at) values ($1,$2,'NOTE',$3,$4)",
+        [opportunityId, companyId, `Lead note from ${event.source}: ${event.notes}`, event.created_at ?? new Date()],
+      );
+    }
 
     await tx.query(
       "insert into integration_events(provider, external_event_id, payload, opportunity_id) values ($1,$2,$3,$4)",

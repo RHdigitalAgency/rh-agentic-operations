@@ -8,13 +8,16 @@ Date: 2026-10-20
 - PostgreSQL schema as SQL migrations (`database/migrations/`), deterministic reference data, local demo seed.
 - Service layer (`src/server/`) holding all business rules and data-level RBAC. Pages, server actions and API routes are thin wrappers.
 - Pure, unit-tested domain logic (`src/domain/`): pipeline rules, scoring, ROI, KPI comparison, analytics, money.
-- 61 automated tests (unit, integration, RBAC, ingestion HTTP contract, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
+- 64 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
 
 ## Hosting
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
 - Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0002 are applied.
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
 - Runbook: `docs/11_DEPLOYMENT_AND_RECOVERY.md`.
+
+## External dependencies
+- **External Instagram Automation – pending connection, non-blocking.** The receiving side is done: `POST /api/integrations/leads` (signed, idempotent, flat Instagram fields) is documented in the README, with a fixture (`tests/fixtures/instagram-lead.json`), a simulator (`npm run lead:simulate`) and tests (`tests/integration/instagram-ingestion.test.ts`). Manual lead entry covers the gap. Nothing in this repo builds the Instagram automation itself.
 
 ## Backlog
 TASK-001 → TASK-024 done (see `tasks/BACKLOG.md`). Open: TASK-025 Stripe webhook (P1, hook point `confirmAuditPayment`), TASK-026 SOP library (P2, only after real usage).
@@ -35,7 +38,7 @@ TASK-001 → TASK-024 done (see `tasks/BACKLOG.md`). Open: TASK-025 Stripe webho
 8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. Re-run the real-Postgres suite after driver or schema changes.
 
 ## Next actions
-1. Share the lead-ingestion secret and contract with the Instagram Growth Automation project (README → "Lead ingestion API").
+1. When the Instagram automation is ready: share the secret privately and point it at the README contract.
 2. Put the code in GitHub (private repo) and connect it to Vercel for automatic deploys.
 3. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
 4. Before real client data: decide the production/staging split (see `docs/11_DEPLOYMENT_AND_RECOVERY.md`) and enable Supabase backups.

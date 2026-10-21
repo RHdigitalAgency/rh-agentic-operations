@@ -1,0 +1,13 @@
+{
+  "external_event_id": "ig-comment-fixture-0001",
+  "source": "instagram_organic",
+  "campaign": "agentic_operations",
+  "post": "reel_2026_10_20_01",
+  "keyword": "AGENTES",
+  "instagram_username": "casa_verde_landscaping",
+  "name": "Mariela Torres",
+  "email": "mariela@casaverde.example.com",
+  "phone": "+1 305 555 0199",
+  "notes": "Commented AGENTES on the reel; asked about automating quote follow-ups.",
+  "created_at": "2026-10-20T14:32:00Z"
+}

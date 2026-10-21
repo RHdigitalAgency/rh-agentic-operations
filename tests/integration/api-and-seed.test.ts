@@ -54,7 +54,7 @@ describe("POST /api/integrations/leads (HTTP contract)", () => {
 
   it("validates payloads (400)", async () => {
     const bad = JSON.stringify({ campaign: "no source" });
-    const r = await POST(req(bad, { "x-rh-ingestion-secret": secret }));
+    const r = await POST(req(bad, { "x-rh-signature": sign(bad) }));
     expect(r.status).toBe(400);
     expect((await r.json()).error.code).toBe("VALIDATION");
   });

@@ -7,9 +7,9 @@ import { jsonError } from "../../_lib";
 const MAX_BODY_BYTES = 64 * 1024;
 
 /**
- * POST /api/integrations/leads — normalized lead events from Instagram Growth Automation, website forms, etc.
- * Auth: `x-rh-signature: sha256=<hex HMAC of raw body>` (preferred) or `x-rh-ingestion-secret: <secret>`.
- * Idempotent on external_event_id.
+ * POST /api/integrations/leads — lead events from Instagram Growth Automation, website forms, etc.
+ * Auth: `x-rh-signature: sha256=<hex HMAC-SHA256 of the raw body>` using INSTAGRAM_INGESTION_SHARED_SECRET.
+ * Idempotent on external_event_id. Contract: README "Lead ingestion API".
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.INSTAGRAM_INGESTION_SHARED_SECRET;
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const raw = await req.text();
   if (raw.length > MAX_BODY_BYTES) return jsonError(413, "TOO_LARGE", "Payload too large");
-  if (!verifyIngestionAuth(raw, req.headers, secret)) return jsonError(401, "UNAUTHORIZED", "Invalid signature or secret");
+  if (!verifyIngestionAuth(raw, req.headers, secret)) return jsonError(401, "UNAUTHORIZED", "Missing or invalid x-rh-signature");
 
   let body: unknown;
   try {

@@ -49,14 +49,15 @@ describe("external lead ingestion", () => {
     expect(rows[0].n).toBe(3);
   });
 
-  it("verifies HMAC signatures or the shared secret, and is disabled without a secret", () => {
+  it("accepts only valid HMAC signatures, and nothing without a configured secret", () => {
     const body = JSON.stringify({ source: "x" });
     const secret = "test-secret-value";
     const sig = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
     expect(verifyIngestionAuth(body, new Headers({ "x-rh-signature": sig }), secret)).toBe(true);
     expect(verifyIngestionAuth(body + " ", new Headers({ "x-rh-signature": sig }), secret)).toBe(false);
-    expect(verifyIngestionAuth(body, new Headers({ "x-rh-ingestion-secret": secret }), secret)).toBe(true);
-    expect(verifyIngestionAuth(body, new Headers({ "x-rh-ingestion-secret": "wrong" }), secret)).toBe(false);
-    expect(verifyIngestionAuth(body, new Headers({ "x-rh-ingestion-secret": secret }), undefined)).toBe(false);
+    // Unsigned requests are rejected, including the raw secret sent as a header.
+    expect(verifyIngestionAuth(body, new Headers({ "x-rh-ingestion-secret": secret }), secret)).toBe(false);
+    expect(verifyIngestionAuth(body, new Headers({}), secret)).toBe(false);
+    expect(verifyIngestionAuth(body, new Headers({ "x-rh-signature": sig }), undefined)).toBe(false);
   });
 });

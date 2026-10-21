@@ -29,7 +29,10 @@ Example payload:
 }
 ```
 
+The flat Instagram shape (`post`, `instagram_username`, `name`, `email`, `phone`, `notes`, `created_at`) is also accepted. The exact field table, signature and responses are in the README section "Lead ingestion API".
+
 Rules:
+- requests must carry `x-rh-signature: sha256=<HMAC-SHA256 of the raw body>`; unsigned requests are rejected
 - idempotent on `external_event_id` when supplied
 - never create duplicate opportunities for the same event
 - persist source/campaign/content/keyword
