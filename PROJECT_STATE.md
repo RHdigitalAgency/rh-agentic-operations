@@ -17,7 +17,7 @@ Production currently contains the **removable demo dataset** (added 2026-10-21 f
 ## Hosting
 - Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private). Connected to Vercel: push to `main` → production; other branches → preview.
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
-- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0004 are applied. **0005 (integrity constraints) is on branch `hardening`: apply it with `npm run db:migrate` before merging** (the app would otherwise apply it on first start; applying first proves existing data satisfies the new constraints).
+- Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0005 are applied (0005 on 2026-10-21, before the `hardening` merge).
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
 - Vercel previews run on an isolated in-memory demo database (no production access). Each instance has its own demo data, so preview sessions can drop between pages — previews are for quick visual review; test flows locally.
 - UI: RH Digital Agency brand system (brand book in `assets/branding`, untracked), live since 2026-10-21.
