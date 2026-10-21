@@ -8,6 +8,7 @@ import { ROLE_LABELS } from "@/lib/auth/roles";
 import type { Capability } from "@/lib/auth/roles";
 import { logoutAction } from "@/app/actions";
 import { Flash } from "@/components/Flash";
+import { FormRecovery } from "@/components/FormRecovery";
 import { NavLinks, type NavItem } from "@/components/NavLinks";
 import { SidebarShell } from "@/components/SidebarShell";
 import { Shortcuts } from "@/components/Shortcuts";
@@ -88,6 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="mx-auto max-w-7xl p-4 sm:p-6">
           <Suspense>
             <Flash />
+            <FormRecovery />
           </Suspense>
           <Shortcuts canCreateLead={can(user, "crm.write")} />
           {children}
