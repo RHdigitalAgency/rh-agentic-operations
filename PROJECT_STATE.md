@@ -24,7 +24,7 @@ Date: 2026-10-20
 ## Backlog
 TASK-001 → TASK-025 done (see `tasks/BACKLOG.md`). Open: TASK-026 SOP library (P2, only after real usage).
 
-Payments: manual confirmation for all clients (standard for non-US); Stripe Checkout link + signed webhook for US card payments. Stripe is **inactive until keys are added** (README → "Audit payments").
+Payments: manual confirmation for all clients (standard for non-US); Stripe Checkout link + signed webhook for US card payments. Stripe is **active in test mode** in production (verified end-to-end 2026-10-21: test card payment → webhook → audit marked paid automatically). Going live = swap in live-mode keys + live webhook (README → "Audit payments").
 
 ## Architecture decisions that differ from the starter docs
 - ADR-0003: embedded Postgres (PGlite) for local/test; in-app session auth instead of Supabase Auth for v0.1; RBAC in the service layer, not RLS.
@@ -42,7 +42,7 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. That setting breaks postgres.js `sql.begin`, so transactions use a reserved connection with explicit BEGIN/COMMIT (fixed 2026-10-20; writes were failing in production between the pipelining change and this fix). Re-run the real-Postgres suite after driver or schema changes.
 
 ## Next actions
-1. Activate Stripe when ready (test mode first): add `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL` in Vercel and create the webhook endpoint (README).
+1. Switch Stripe to live mode before the first real US client: live secret key + live webhook signing secret in Vercel (Production), then redeploy.
 2. When the Instagram automation is ready: share the secret privately and point it at the README contract.
 3. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
 4. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
