@@ -1,7 +1,7 @@
 import type { Db, Queryable } from "@/lib/db/types";
 import type { SessionUser } from "@/lib/auth/user";
 import { scopeOf } from "@/lib/auth/user";
-import { assertFound } from "@/lib/errors";
+import { assertFound, ConflictError, NotFoundError } from "@/lib/errors";
 
 /** Every service call runs with a database handle and the authenticated caller. */
 export interface Ctx {
@@ -81,6 +81,26 @@ export async function logAudit(
     ],
   );
 }
+
+type LockableTable = "audits" | "proposals" | "deployments" | "opportunities" | "agentic_opportunities";
+
+/**
+ * Locks a row for the rest of the transaction and checks its status. Concurrent requests for the same record
+ * (double submits, two tabs, a webhook racing a manual confirmation) are serialized: the second one waits, sees
+ * the new status and fails cleanly instead of applying the same transition twice.
+ */
+export async function lockStatus(tx: Queryable, table: LockableTable, id: string, expected?: readonly string[]): Promise<string | null> {
+  const column = table === "opportunities" ? "stage" : table === "agentic_opportunities" ? "null::text" : "status";
+  const [row] = await tx.query<{ status: string | null }>(`select ${column} as status from ${table} where id = $1 for update`, [id]);
+  if (!row) throw new NotFoundError();
+  if (expected && !expected.includes(row.status ?? "")) {
+    throw new ConflictError("This record was just changed (possibly in another tab). Refresh the page and try again.");
+  }
+  return row.status;
+}
+
+/** ILIKE pattern matching `term` literally anywhere: escapes %, _ and Postgres' default LIKE escape character. */
+export const containsPattern = (term: string) => `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 export const isUuid = (v: unknown): v is string =>
   typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);

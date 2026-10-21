@@ -4,7 +4,7 @@ import { assertFound, ForbiddenError, ValidationError } from "@/lib/errors";
 import { bool, oneOf, optDay, optList, optNum, optStr, optUrl, reqNum, reqStr, todayLocal } from "@/lib/validate";
 import { deliveryCostCents, grossMargin } from "@/domain/money";
 import { compareKpis, type KpiRow } from "@/domain/kpi";
-import { companyVisible, logAudit, Sql, type Ctx } from "./context";
+import { companyVisible, lockStatus, logAudit, Sql, type Ctx } from "./context";
 import { getInternalHourlyCostCents } from "./settings";
 
 export const DEPLOYMENT_STATUSES = ["PLANNED", "BUILD", "QA", "LAUNCHED", "MONITORING", "COMPLETED", "PAUSED", "CANCELLED"] as const;
@@ -165,6 +165,7 @@ export async function changeDeploymentStatus(ctx: Ctx, id: string, statusInput: 
     if (problems.length) throw new ValidationError(`Not ready to launch: ${problems.join("; ")}`);
   }
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "deployments", id, [d.status]);
     await tx.query(
       `update deployments set status = $2, launch_date = case when $2 = 'LAUNCHED' and launch_date is null then current_date else launch_date end,
          end_date = case when $2 in ('COMPLETED','CANCELLED') and end_date is null then current_date else end_date end, updated_at = now() where id = $1`,

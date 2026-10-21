@@ -13,6 +13,7 @@ import { STAGE_LABELS } from "@/domain/pipeline";
 import { formatCents } from "@/domain/money";
 import { monthlyRevenue } from "@/domain/analytics";
 import { FollowUpList } from "@/components/FollowUpList";
+import { zonedDay } from "@/lib/time";
 import { Card, Empty, fmtNum, fmtPct, PageHeader, Stat } from "@/components/ui";
 
 export const metadata = { title: "Dashboard" };
@@ -29,7 +30,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+const iso = (d: Date) => zonedDay(d);
 
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCtx();

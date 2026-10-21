@@ -4,6 +4,7 @@ import { can } from "@/lib/auth/user";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { readParams, type SearchParams } from "@/lib/params";
 import { sortRows } from "@/lib/sort";
+import { endOfZonedDay } from "@/lib/time";
 import { SortHeader } from "@/components/SortHeader";
 import { listActiveUsers, listOpportunities, listReference } from "@/server/crm";
 import { formatCents } from "@/domain/money";
@@ -15,9 +16,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Sea
   const ctx = await requireCtx();
   const p = await readParams(searchParams);
   const now = new Date().getTime();
-  const eod = new Date(now);
-  eod.setHours(23, 59, 59, 999);
-  const endOfToday = eod.getTime();
+  const endOfToday = endOfZonedDay(new Date(now)).getTime();
   const attention = p.attention === "1";
   const view = (["open", "won", "lost", "all"].includes(p.view ?? "") ? p.view : "open") as "open" | "won" | "lost" | "all";
   const [allOpps, ref, users] = await load(Promise.all([

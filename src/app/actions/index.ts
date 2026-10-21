@@ -6,8 +6,8 @@ import { getDb } from "@/lib/db";
 import { createSession, deleteSession, hashSessionToken, LOCKOUT_WINDOW_MINUTES, SESSION_COOKIE, signIn } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/auth/current";
-import { AppError } from "@/lib/errors";
-import { formObject, run } from "./run";
+import { toAppError } from "@/lib/errors";
+import { formObject, run, safeLocalPath } from "./run";
 import * as crm from "@/server/crm";
 import * as audits from "@/server/audits";
 import * as proposals from "@/server/proposals";
@@ -18,10 +18,7 @@ import { SCORE_DIMENSIONS } from "@/domain/scoring";
 import { parseMoneyToCents } from "@/domain/money";
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "");
-const back = (fd: FormData, fallback: string) => {
-  const b = s(fd, "_back");
-  return b.startsWith("/") && !b.startsWith("//") ? b : fallback;
-};
+const back = (fd: FormData, fallback: string) => safeLocalPath(s(fd, "_back"), fallback);
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -108,7 +105,8 @@ export async function moveStageAction(id: string, to: string): Promise<{ ok: boo
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
-    if (e instanceof AppError) return { ok: false, error: e.message };
+    const err = toAppError(e);
+    if (err) return { ok: false, error: err.message };
     throw e;
   }
 }

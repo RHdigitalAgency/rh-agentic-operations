@@ -7,7 +7,7 @@ export default async function PaidPage({ searchParams }: { searchParams: SearchP
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="card max-w-md text-center">
-        <div className="text-xs font-semibold tracking-widest text-brand-700 uppercase">RH Digital Agency</div>
+        <div className="eyebrow">RH Digital Agency</div>
         <h1 className="mt-2">{cancelled ? "Payment not completed" : "Payment received — thank you"}</h1>
         <p className="muted mt-2">
           {cancelled

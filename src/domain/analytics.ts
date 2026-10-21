@@ -1,4 +1,5 @@
 import { compareKpis, type KpiRow } from "./kpi";
+import { endOfZonedDay, zonedDay, zonedTimeToUtc } from "@/lib/time";
 import { deliveryCostCents, grossMargin } from "./money";
 import { STAGES, stageIndex, type Stage } from "./pipeline";
 
@@ -37,8 +38,10 @@ export function median(values: number[]): number | null {
 }
 
 export function computeDashboard(data: AnalyticsData, period: Period, opts: { baseCurrency: string; internalHourlyCostCents: number; now?: Date }) {
-  const start = new Date(`${period.from}T00:00:00.000Z`).getTime();
-  const end = new Date(`${period.to}T00:00:00.000Z`).getTime() + 86400000;
+  // Period days are business-zone calendar days.
+  const dayStart = (day: string, plus = 0) => { const [y, m, d] = day.split("-").map(Number); return zonedTimeToUtc(y, m, d + plus).getTime(); };
+  const start = dayStart(period.from);
+  const end = dayStart(period.to, 1);
   const inP = (d: Date | string | null | undefined) => {
     if (!d) return false;
     const t = new Date(d).getTime();
@@ -159,8 +162,7 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
 
   // Follow-ups (current state, not period bound)
   const now = opts.now ?? new Date();
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
+  const endOfToday = endOfZonedDay(now);
   const open = data.opportunities.filter((o) => stageIndex(o.stage) < stageIndex("WON_DEPLOYMENT"));
   const overdue = open.filter((o) => o.next_action_at && new Date(o.next_action_at) < now);
   const dueToday = open.filter((o) => o.next_action_at && new Date(o.next_action_at) >= now && new Date(o.next_action_at) <= endOfToday);
@@ -206,18 +208,18 @@ export function computeDashboard(data: AnalyticsData, period: Period, opts: { ba
 export type Dashboard = ReturnType<typeof computeDashboard>;
 
 /**
- * Revenue per calendar month (UTC) for the last `months` months, base currency only: paid audit fees by payment date
+ * Revenue per calendar month (business time zone) for the last `months` months, base currency only: paid audit fees by payment date
  * and won implementation work (net of audit credit) by decision date. Retainers are excluded (see MRR).
  */
 export function monthlyRevenue(data: Pick<AnalyticsData, "audits" | "proposals">, opts: { baseCurrency: string; months?: number; now?: Date }) {
   const n = opts.months ?? 6;
-  const now = opts.now ?? new Date();
+  const [year, monthNow] = zonedDay(opts.now ?? new Date()).split("-").map(Number);
   const buckets = Array.from({ length: n }, (_, i) => {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (n - 1 - i), 1));
+    const d = new Date(Date.UTC(year, monthNow - 1 - (n - 1 - i), 1));
     return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), auditCents: 0, implementationCents: 0 };
   });
   const byKey = new Map(buckets.map((b) => [b.key, b]));
-  const month = (d: Date | null) => (d ? byKey.get(new Date(d).toISOString().slice(0, 7)) : undefined);
+  const month = (d: Date | null) => (d ? byKey.get(zonedDay(new Date(d)).slice(0, 7)) : undefined);
   for (const a of data.audits) {
     const b = a.status !== "CANCELLED" && a.currency === opts.baseCurrency ? month(a.paid_at) : undefined;
     if (b) b.auditCents += a.price_cents;

@@ -20,3 +20,12 @@ describe("sortRows", () => {
     expect(sortRows(rows, acc, "nope", "asc")).toBe(rows);
   });
 });
+
+import { containsPattern } from "@/server/context";
+
+describe("containsPattern", () => {
+  it("matches search terms literally", () => {
+    // input: 50%_off\   expected: %50\%\_off\\%
+    expect(containsPattern("50%_off\\")).toBe("%50\\%\\_off\\\\%");
+  });
+});

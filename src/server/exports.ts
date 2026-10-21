@@ -5,6 +5,9 @@ import { listAudits } from "./audits";
 import { listProposals } from "./proposals";
 import type { Ctx } from "./context";
 
+/** Exports must be complete; screens cap their lists, exports do not (bounded only as a safety net). */
+const EXPORT_LIMIT = 100_000;
+
 /** RFC 4180 CSV with formula-injection protection for spreadsheet consumers. */
 export function toCsv(headers: string[], rows: unknown[][]): string {
   const cell = (v: unknown) => {
@@ -19,7 +22,7 @@ export function toCsv(headers: string[], rows: unknown[][]): string {
 export async function exportCsv(ctx: Ctx, kind: string): Promise<string> {
   requireCap(ctx.user, "export");
   if (kind === "leads" || kind === "pipeline") {
-    const opps = await listOpportunities(ctx, { view: kind === "pipeline" ? "open" : "all" });
+    const opps = await listOpportunities(ctx, { view: kind === "pipeline" ? "open" : "all", limit: EXPORT_LIMIT });
     return toCsv(
       ["opportunity_id", "created_at", "company", "vertical", "contact", "owner", "stage", "source", "campaign", "content_id", "keyword", "referrer", "utm",
         "estimated_value", "currency", "next_action", "next_action_at", "loss_reason", "nurture_at"],
@@ -40,7 +43,7 @@ export async function exportCsv(ctx: Ctx, kind: string): Promise<string> {
   }
   const money = (c: number | null | undefined) => (c === null || c === undefined ? null : (c / 100).toFixed(2));
   if (kind === "companies") {
-    const rows = await listCompanies(ctx);
+    const rows = await listCompanies(ctx, { limit: EXPORT_LIMIT });
     return toCsv(
       ["company_id", "name", "vertical", "website", "city", "country", "owner", "source", "status", "open_opportunities", "deployments", "created_at"],
       rows.map((c) => [c.id, c.name, c.vertical, c.website, c.city, c.country, c.owner_name, c.source, c.status, c.open_opps, c.deployments, c.created_at]),

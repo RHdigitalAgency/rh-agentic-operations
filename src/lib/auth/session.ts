@@ -19,7 +19,7 @@ export async function authenticate(db: Queryable, email: string, password: strin
     "select id, email, full_name, role, password_hash, active from app_users where lower(email) = lower($1)",
     [email.trim()],
   );
-  const ok = verifyPassword(password, row?.password_hash);
+  const ok = await verifyPassword(password, row?.password_hash);
   if (!row || !row.active || !ok) return null;
   return toSessionUser(row);
 }
@@ -67,5 +67,7 @@ export async function signIn(db: Queryable, email: string, password: string): Pr
   if (failures >= LOCKOUT_MAX_FAILURES) return { ok: false, reason: "locked" };
   const user = await authenticate(db, normalized, password);
   await db.query("insert into login_attempts(email, succeeded) values ($1, $2)", [normalized, Boolean(user)]);
+  // Keep the table small: attempts older than a day never affect the lockout window.
+  await db.query("delete from login_attempts where lower(email) = $1 and created_at < now() - interval '1 day'", [normalized]);
   return user ? { ok: true, user } : { ok: false, reason: "invalid" };
 }

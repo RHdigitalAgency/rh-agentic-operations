@@ -7,7 +7,7 @@ import { normalizeCurrency } from "@/domain/money";
 import { calculateRoi, parseRoiAssumptions, ROI_MODEL_VERSION } from "@/domain/roi";
 import { calculateScore, riskFlags, validateRawScores, validateWeights, type RawScores, type Weights } from "@/domain/scoring";
 import { autoAdvance, getOpportunity } from "./crm";
-import { companyVisible, logAudit, Sql, type Ctx } from "./context";
+import { companyVisible, lockStatus, logAudit, Sql, type Ctx } from "./context";
 
 export const AUDIT_STATUSES = ["OFFERED", "PAID", "IN_PROGRESS", "PRESENTED", "CANCELLED"] as const;
 export const CLASSIFICATIONS = ["HUMAN_ONLY", "AUTOMATE", "AGENT_READY", "REDESIGN_FIRST"] as const;
@@ -82,6 +82,7 @@ export async function offerAudit(ctx: Ctx, opportunityId: string, input: Record<
   if (!Number.isSafeInteger(price) || price <= 0) throw new ValidationError("Audit price is required: the audit is paid from day one");
   const owner = await resolveAuditOwner(ctx.db, input.owner_user_id);
   return ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "opportunities", opportunityId);
     const [active] = await tx.query("select id from audits where opportunity_id = $1 and status <> 'CANCELLED'", [opportunityId]);
     if (active) throw new ConflictError("This opportunity already has an active audit");
     const currency = normalizeCurrency(optStr(input.currency, 3) ?? opp.currency);
@@ -116,6 +117,7 @@ export async function markAuditPaid(
   audit: Pick<AuditRow, "id" | "status" | "price_cents" | "opportunity_id">,
   payment: { paidAt: Date; reference: string | null; actorLabel?: string; via?: string },
 ) {
+  await lockStatus(tx, "audits", audit.id, ["OFFERED"]);
   await tx.query("update audits set status = 'PAID', paid_at = $2, payment_reference = $3, updated_at = now() where id = $1", [audit.id, payment.paidAt, payment.reference]);
   await logAudit(
     tx, actor, "audit", audit.id, "payment_confirmed",
@@ -134,6 +136,7 @@ export async function startAudit(ctx: Ctx, id: string) {
   const audit = await getAudit(ctx, id);
   if (audit.status !== "PAID") throw new ValidationError("Only a paid audit can be started");
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "audits", id, ["PAID"]);
     await tx.query("update audits set status = 'IN_PROGRESS', updated_at = now() where id = $1", [id]);
     await logAudit(tx, ctx.user, "audit", id, "status_change", { status: audit.status }, { status: "IN_PROGRESS" });
     if (audit.opportunity_id) {
@@ -156,6 +159,7 @@ export async function presentAudit(ctx: Ctx, id: string, input: Record<string, u
   const presentedAt = optDate(input.presentation_at, "Presentation date") ?? new Date();
   const deliverable = optUrl(input.deliverable_url, "Deliverable link") ?? audit.deliverable_url;
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "audits", id, ["IN_PROGRESS"]);
     await tx.query("update audits set status = 'PRESENTED', presentation_at = $2, deliverable_url = $3, updated_at = now() where id = $1", [id, presentedAt, deliverable]);
     await logAudit(tx, ctx.user, "audit", id, "status_change", { status: audit.status }, { status: "PRESENTED", presentation_at: presentedAt });
     if (audit.opportunity_id) {
@@ -170,6 +174,7 @@ export async function cancelAudit(ctx: Ctx, id: string) {
   const audit = await getAudit(ctx, id);
   if (audit.status === "CANCELLED") return;
   await ctx.db.transaction(async (tx) => {
+    if ((await lockStatus(tx, "audits", id)) === "CANCELLED") return;
     await tx.query("update audits set status = 'CANCELLED', updated_at = now() where id = $1", [id]);
     await logAudit(tx, ctx.user, "audit", id, "status_change", { status: audit.status }, { status: "CANCELLED" });
   });

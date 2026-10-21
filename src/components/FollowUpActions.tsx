@@ -3,15 +3,12 @@ import { completeFollowUpAction, snoozeFollowUpAction } from "@/app/actions";
 import type { OpportunityRow } from "@/server/crm";
 import { SubmitButton } from "./SubmitButton";
 import { Hidden, toLocalInput } from "./ui";
+import { zonedAt } from "@/lib/time";
 
 const ACTIVITY_LABELS: [string, string][] = [["CALL", "Call"], ["DM", "DM"], ["EMAIL", "Email"], ["MEETING", "Meeting"], ["TASK", "Task"], ["NOTE", "Note"]];
 
-/** Two working days out at 09:00: the default deadline for the next step. */
-function inTwoDays(now: number) {
-  const d = new Date(now + 2 * 86400000);
-  d.setHours(9, 0, 0, 0);
-  return d;
-}
+/** Two days out at 09:00 business time: the default deadline for the next step. */
+const inTwoDays = (now: number) => zonedAt(2, 9, 0, new Date(now));
 
 /**
  * One-click follow-up handling: snooze 1 day / 1 week, or mark done (logs what happened and sets the next step).

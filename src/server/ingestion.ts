@@ -96,14 +96,17 @@ export function parseLeadEvent(body: unknown): LeadEvent {
 async function findExistingContact(tx: Queryable, c: NonNullable<LeadEvent["contact"]>) {
   const handle = c.instagram_handle?.replace(/^@/, "") ?? null;
   const checks: [string, string | null][] = [
-    ["lower(email) = lower($1)", c.email],
-    ["lower(instagram_handle) = lower($1)", handle],
-    ["phone = $1", c.phone],
+    ["lower(ct.email) = lower($1)", c.email],
+    ["lower(ct.instagram_handle) = lower($1)", handle],
+    ["ct.phone = $1", c.phone],
   ];
   for (const [cond, val] of checks) {
     if (!val) continue;
+    // Contacts of archived companies are not reused: the new lead would be invisible in the pipeline.
     const [row] = await tx.query<{ id: string; company_id: string }>(
-      `select id, company_id from contacts where ${cond} and archived_at is null and company_id is not null order by created_at limit 1`,
+      `select ct.id, ct.company_id from contacts ct join companies c on c.id = ct.company_id
+       where ${cond} and ct.archived_at is null and c.archived_at is null
+       order by ct.created_at limit 1`,
       [val],
     );
     if (row) return row;
@@ -192,10 +195,18 @@ export async function ingestLead(db: Db, event: LeadEvent, provider = "lead_inge
   });
 }
 
-/** Naive fixed-window rate limiter (per process). Adequate for a single internal instance; replace at the edge for scale. */
+/**
+ * Fixed-window rate limiter (per server instance) — a first line of defence; add an edge limit (Vercel firewall)
+ * if the endpoint sees abuse. Expired windows are swept so memory stays bounded under many distinct keys.
+ */
 const windows = new Map<string, { start: number; count: number }>();
+const MAX_TRACKED_KEYS = 10_000;
 export function rateLimit(key: string, limit = 60, windowMs = 60_000): boolean {
   const now = Date.now();
+  if (windows.size >= MAX_TRACKED_KEYS) {
+    for (const [k, v] of windows) if (now - v.start > windowMs) windows.delete(k);
+    if (windows.size >= MAX_TRACKED_KEYS) return false; // still saturated: shed load rather than grow without bound
+  }
   const w = windows.get(key);
   if (!w || now - w.start > windowMs) {
     windows.set(key, { start: now, count: 1 });

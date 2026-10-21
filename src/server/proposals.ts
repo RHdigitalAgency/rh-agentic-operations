@@ -5,7 +5,7 @@ import { bool, oneOf, optDay, optStr, reqStr, todayLocal } from "@/lib/validate"
 import { normalizeCurrency } from "@/domain/money";
 import { autoAdvance, getOpportunity } from "./crm";
 import { getAgenticOpportunity, getAudit } from "./audits";
-import { companyVisible, logAudit, Sql, type Ctx } from "./context";
+import { companyVisible, lockStatus, logAudit, Sql, type Ctx } from "./context";
 
 export const PROPOSAL_TYPES = ["PILOT", "DEPLOYMENT", "RETAINER", "SMB_STARTER"] as const;
 export type ProposalType = (typeof PROPOSAL_TYPES)[number];
@@ -110,6 +110,7 @@ export async function createProposalFromAgenticOpportunity(ctx: Ctx, agenticOppo
   const amount = amountOf(input.amount_cents);
   const credit = await resolveCredit(ctx.db, audit.id, type, amount, bool(input.apply_audit_credit));
   return ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "agentic_opportunities", agenticOpportunityId);
     const [dup] = await tx.query("select id from proposals where agentic_opportunity_id = $1 and status in ('DRAFT','SENT','ACCEPTED')", [agenticOpportunityId]);
     if (dup) throw new ConflictError("An active proposal already exists for this opportunity");
     const title = optStr(input.title, 200) ?? `${type === "PILOT" ? "Agentic Pilot" : "Agentic Deployment"}: ${ao.process_name}`;
@@ -160,6 +161,7 @@ export async function updateProposalDraft(ctx: Ctx, id: string, input: Record<st
     audit_credit_cents: await resolveCredit(ctx.db, p.audit_id, p.proposal_type, amount, bool(input.apply_audit_credit), id),
   };
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "proposals", id, ["DRAFT"]);
     await tx.query("update proposals set title=$2, scope_summary=$3, amount_cents=$4, audit_credit_cents=$5, updated_at=now() where id=$1", [id, after.title, after.scope_summary, after.amount_cents, after.audit_credit_cents]);
     await logAudit(tx, ctx.user, "proposal", id, "update", { title: p.title, amount_cents: p.amount_cents, audit_credit_cents: p.audit_credit_cents }, after);
   });
@@ -170,6 +172,7 @@ export async function sendProposal(ctx: Ctx, id: string) {
   const p = await getProposal(ctx, id);
   if (p.status !== "DRAFT") throw new ValidationError("Only draft proposals can be sent");
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "proposals", id, ["DRAFT"]);
     await tx.query("update proposals set status='SENT', sent_at=now(), updated_at=now() where id=$1", [id]);
     await logAudit(tx, ctx.user, "proposal", id, "status_change", { status: "DRAFT" }, { status: "SENT" });
     if (p.opportunity_id) {
@@ -197,6 +200,7 @@ export async function acceptProposal(ctx: Ctx, id: string, input: Record<string,
     if (!u || !["DELIVERY", "ADMIN_MANAGER"].includes(u.role)) throw new ValidationError("Delivery owner must be an active delivery user or manager");
   }
   return ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "proposals", id, ["SENT"]);
     await tx.query("update proposals set status='ACCEPTED', decision_at=now(), updated_at=now() where id=$1", [id]);
     await logAudit(tx, ctx.user, "proposal", id, "status_change", { status: "SENT" }, { status: "ACCEPTED", amount_cents: p.amount_cents, audit_credit_cents: p.audit_credit_cents, net_cents: p.amount_cents - p.audit_credit_cents });
     if (p.proposal_type === "RETAINER") {
@@ -227,6 +231,7 @@ export async function rejectProposal(ctx: Ctx, id: string) {
   const p = await getProposal(ctx, id);
   if (p.status !== "SENT") throw new ValidationError("Only sent proposals can be rejected");
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "proposals", id, ["SENT"]);
     await tx.query("update proposals set status='REJECTED', decision_at=now(), updated_at=now() where id=$1", [id]);
     await logAudit(tx, ctx.user, "proposal", id, "status_change", { status: "SENT" }, { status: "REJECTED" });
   });
@@ -237,6 +242,7 @@ export async function withdrawProposal(ctx: Ctx, id: string) {
   const p = await getProposal(ctx, id);
   if (!["DRAFT", "SENT"].includes(p.status)) throw new ValidationError("Only draft or sent proposals can be withdrawn");
   await ctx.db.transaction(async (tx) => {
+    await lockStatus(tx, "proposals", id, ["DRAFT", "SENT"]);
     await tx.query("update proposals set status='WITHDRAWN', updated_at=now() where id=$1", [id]);
     await logAudit(tx, ctx.user, "proposal", id, "status_change", { status: p.status }, { status: "WITHDRAWN" });
   });

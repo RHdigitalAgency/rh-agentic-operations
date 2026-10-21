@@ -66,7 +66,7 @@ export async function changeOwnPassword(ctx: Ctx, input: Record<string, unknown>
   if (next.length < MIN_PASSWORD_LENGTH) throw new ValidationError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters`);
   if (next === current) throw new ValidationError("Choose a password different from the current one");
   const [row] = await ctx.db.query<{ password_hash: string | null }>("select password_hash from app_users where id = $1", [ctx.user.id]);
-  if (!verifyPassword(current, row?.password_hash)) throw new ValidationError("Current password is incorrect");
+  if (!(await verifyPassword(current, row?.password_hash))) throw new ValidationError("Current password is incorrect");
   await ctx.db.transaction(async (tx) => {
     await tx.query("update app_users set password_hash = $2 where id = $1", [ctx.user.id, hashPassword(next)]);
     await tx.query("delete from user_sessions where user_id = $1 and token_hash is distinct from $2", [ctx.user.id, keepSessionTokenHash ?? null]);

@@ -5,8 +5,9 @@ import { assertFound, ForbiddenError, ValidationError } from "@/lib/errors";
 import { bool, oneOf, optDate, optEmail, optOneOf, optStr, optUrl, reqStr } from "@/lib/validate";
 import { checkTransition, isOpen, STAGES, type Stage, type TransitionFacts } from "@/domain/pipeline";
 import { normalizeCurrency } from "@/domain/money";
+import { endOfZonedDay } from "@/lib/time";
 import type { KpiRow } from "@/domain/kpi";
-import { assertCompanyVisible, companyVisible, logAudit, opportunityVisible, Sql, type Ctx } from "./context";
+import { assertCompanyVisible, companyVisible, containsPattern, logAudit, opportunityVisible, Sql, type Ctx } from "./context";
 import { getDefaultLeadOwner } from "./settings";
 
 // ---------------------------------------------------------------------------
@@ -115,18 +116,18 @@ async function assertRef(db: Queryable, table: "ref_verticals" | "ref_loss_reaso
 // ---------------------------------------------------------------------------
 // Companies & contacts
 // ---------------------------------------------------------------------------
-export async function listCompanies(ctx: Ctx, filters: { q?: string; vertical?: string } = {}) {
+export async function listCompanies(ctx: Ctx, filters: { q?: string; vertical?: string; limit?: number } = {}) {
   requireCap(ctx.user, "crm.read");
   const q = new Sql();
   const where = [`c.archived_at is null`, companyVisible(q, ctx.user, "c")];
-  if (filters.q) where.push(`c.name ilike ${q.p(`%${filters.q}%`)}`);
+  if (filters.q) where.push(`c.name ilike ${q.p(containsPattern(filters.q))}`);
   if (filters.vertical) where.push(`c.vertical = ${q.p(filters.vertical)}`);
   return ctx.db.query<CompanyRow & { open_opps: number; deployments: number }>(
     `select c.*, u.full_name as owner_name,
        (select count(*) from opportunities o where o.company_id = c.id and o.archived_at is null and o.stage not in ('WON_DEPLOYMENT','WON_RETAINER','LOST_NURTURE'))::int as open_opps,
        (select count(*) from deployments d where d.company_id = c.id)::int as deployments
      from companies c left join app_users u on u.id = c.owner_user_id
-     where ${where.join(" and ")} order by c.name limit 500`,
+     where ${where.join(" and ")} order by c.name limit ${q.p(filters.limit ?? 500)}`,
     q.params,
   );
 }
@@ -258,6 +259,8 @@ export interface OpportunityFilters {
   q?: string;
   from?: string;
   to?: string;
+  /** Row cap for screens; exports pass a larger one. */
+  limit?: number;
 }
 
 export async function listOpportunities(ctx: Ctx, f: OpportunityFilters = {}) {
@@ -274,10 +277,10 @@ export async function listOpportunities(ctx: Ctx, f: OpportunityFilters = {}) {
   if (f.from) where.push(`o.created_at >= ${q.p(f.from)}::date`);
   if (f.to) where.push(`o.created_at < (${q.p(f.to)}::date + 1)`);
   if (f.q) {
-    const like = q.p(`%${f.q}%`);
+    const like = q.p(containsPattern(f.q));
     where.push(`(c.name ilike ${like} or o.title ilike ${like} or o.keyword ilike ${like} or o.campaign ilike ${like})`);
   }
-  return ctx.db.query<OpportunityRow>(`${OPP_SELECT} where ${where.join(" and ")} order by o.next_action_at nulls last, o.created_at desc limit 1000`, q.params);
+  return ctx.db.query<OpportunityRow>(`${OPP_SELECT} where ${where.join(" and ")} order by o.next_action_at nulls last, o.created_at desc limit ${q.p(f.limit ?? 1000)}`, q.params);
 }
 
 export async function getOpportunity(ctx: Ctx, id: string) {
@@ -501,7 +504,7 @@ async function gatherFacts(db: Queryable, id: string): Promise<TransitionFacts &
        exists(select 1 from proposals p where p.opportunity_id = o.id and p.sent_at is not null) as has_sent_proposal,
        exists(select 1 from proposals p where p.opportunity_id = o.id and p.status = 'ACCEPTED' and p.proposal_type <> 'RETAINER') as has_accepted_impl,
        exists(select 1 from proposals p where p.opportunity_id = o.id and p.status = 'ACCEPTED' and p.proposal_type = 'RETAINER') as has_accepted_retainer
-     from opportunities o where o.id = $1`,
+     from opportunities o where o.id = $1 for update of o`,
     [id],
   );
   return {
@@ -646,8 +649,7 @@ export async function addActivity(ctx: Ctx, input: Record<string, unknown>) {
 export async function followUpQueue(ctx: Ctx, f: { ownerId?: string } = {}) {
   const open = await listOpportunities(ctx, { view: "open", ownerId: f.ownerId });
   const now = new Date();
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
+  const endOfToday = endOfZonedDay(now);
   const in7 = new Date(endOfToday.getTime() + 7 * 86400000);
   const overdue: OpportunityRow[] = [];
   const today: OpportunityRow[] = [];
@@ -714,13 +716,13 @@ export async function search(ctx: Ctx, term: string) {
   const t = term.trim();
   if (t.length < 2) return { companies: [], contacts: [], opportunities: [] };
   const q1 = new Sql();
-  const like1 = q1.p(`%${t}%`);
+  const like1 = q1.p(containsPattern(t));
   const companies = await ctx.db.query<{ id: string; name: string; vertical: string | null }>(
     `select c.id, c.name, c.vertical from companies c where c.archived_at is null and (c.name ilike ${like1} or c.website ilike ${like1}) and ${companyVisible(q1, ctx.user, "c")} order by c.name limit 20`,
     q1.params,
   );
   const q2 = new Sql();
-  const like2 = q2.p(`%${t}%`);
+  const like2 = q2.p(containsPattern(t));
   const contacts = await ctx.db.query<{ id: string; name: string | null; email: string | null; company_id: string; company_name: string }>(
     `select ct.id, ct.name, ct.email, c.id as company_id, c.name as company_name from contacts ct join companies c on c.id = ct.company_id
      where ct.archived_at is null and (ct.name ilike ${like2} or ct.email ilike ${like2} or ct.instagram_handle ilike ${like2} or ct.phone ilike ${like2})
