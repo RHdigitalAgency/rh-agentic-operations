@@ -45,7 +45,23 @@ export function createPostgresDb(url: string, opts: PostgresOptions = {}): Db {
   });
   return {
     ...wrap(sql),
-    transaction: (fn) => sql.begin((tx) => fn(wrap(tx))) as never,
+    // Not sql.begin(): with max_pipeline 0 postgres.js never marks the begin connection as reserved
+    // (connection.js execute() short-circuits on `sent.length < max_pipeline`), so every BEGIN fails
+    // with UNSAFE_TRANSACTION. A reserved connection with explicit BEGIN/COMMIT keeps pipelining off.
+    transaction: async (fn) => {
+      const conn = await sql.reserve();
+      try {
+        await conn.unsafe("begin");
+        const result = await fn(wrap(conn));
+        await conn.unsafe("commit");
+        return result;
+      } catch (e) {
+        await conn.unsafe("rollback").catch(() => {});
+        throw e;
+      } finally {
+        conn.release();
+      }
+    },
     close: () => sql.end(),
   };
 }

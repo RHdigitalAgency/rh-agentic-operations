@@ -39,7 +39,7 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 5. CAC is not computed: there is no acquisition-spend data yet (per the PDR).
 6. No UI to edit/delete individual effort or KPI rows. KPI edit exists in the service, with audit logging.
 7. `npm audit` flags `braces` in the dev-only ESLint toolchain (not shipped). The available fix would downgrade eslint-config-next.
-8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. Re-run the real-Postgres suite after driver or schema changes.
+8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. That setting breaks postgres.js `sql.begin`, so transactions use a reserved connection with explicit BEGIN/COMMIT (fixed 2026-10-20; writes were failing in production between the pipelining change and this fix). Re-run the real-Postgres suite after driver or schema changes.
 
 ## Next actions
 1. Activate Stripe when ready (test mode first): add `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL` in Vercel and create the webhook endpoint (README).
