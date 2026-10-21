@@ -15,7 +15,8 @@ Date: 2026-10-20
 - Vercel project `rh-digital-agency-s-projects/rh-agentic-operations`.
 - Supabase project `rh-agentic-ops-staging` (ref `okayxtwibdspkasospds`, us-east-2). This is **production**; "staging" in the name is a historical label. The app connects as role `rh_app` through the transaction pooler. Migrations 0001–0002 are applied.
 - Admin: `info@rhdigitalagency.com`. Hosted env values live in the untracked `.env.staging.local`.
-- Vercel previews run on an isolated in-memory demo database (no production access); verified 2026-10-20.
+- Vercel previews run on an isolated in-memory demo database (no production access). Each instance has its own demo data, so preview sessions can drop between pages — previews are for quick visual review; test flows locally.
+- UI: RH Digital Agency brand system (brand book in `assets/branding`, untracked), live since 2026-10-21.
 - Runbook: `docs/11_DEPLOYMENT_AND_RECOVERY.md`.
 
 ## External dependencies
@@ -44,7 +45,7 @@ Payments: manual confirmation for all clients (standard for non-US); Stripe Chec
 ## Next actions
 1. Switch Stripe to live mode before the first real US client: live secret key + live webhook signing secret in Vercel (Production), then redeploy.
 2. When the Instagram automation is ready: share the secret privately and point it at the README contract.
-3. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
+3. Further UI feedback: develop locally on PGlite with demo data; previews for quick visual review.
 4. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
 5. Add team members in Settings when they start using it.
 

@@ -4,7 +4,7 @@
 | Env | Database | Notes |
 |---|---|---|
 | Local | PGlite in `./.data/pglite` (`DATABASE_URL` empty) | `npm run db:reset` for demo data |
-| Vercel Preview | Throwaway in-memory Postgres per instance, auto-seeded with demo data | No `DATABASE_URL` for Preview, so previews can never reach production. Sign in with the demo users and `SEED_DEMO_PASSWORD` (Preview env). Data resets on cold start (~10 s first request). Protected by Vercel login. |
+| Vercel Preview | Throwaway in-memory Postgres per instance, auto-seeded with demo data | No `DATABASE_URL` for Preview, so previews can never reach production. Sign in with the demo users and `SEED_DEMO_PASSWORD` (Preview env). Data resets on cold start (~10 s first request), and Vercel may serve pages from different instances, so you can be signed out while navigating. Quick visual review only — test flows locally. Protected by Vercel login. |
 | Production | Supabase `rh-agentic-ops-staging` (the name is a historical label; this is production) | `DATABASE_URL` is Production-only. The app refuses to start in production without it. |
 | Staging (later) | Separate Supabase project | Add when real client data makes a pre-production copy worthwhile |
 
