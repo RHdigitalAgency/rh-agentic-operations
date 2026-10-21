@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queryable } from "@/lib/db/types";
-import { requireCap } from "@/lib/auth/user";
+import { requireCap, type SessionUser } from "@/lib/auth/user";
 import { assertFound, ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { bool, optDate, optList, optNum, optOneOf, optStr, optUrl, reqStr } from "@/lib/validate";
 import { normalizeCurrency } from "@/domain/money";
@@ -34,6 +34,9 @@ export interface AuditRow {
   roadmap_90_day: string | null;
   deliverable_url: string | null;
   presentation_at: Date | null;
+  stripe_checkout_session_id: string | null;
+  stripe_checkout_url: string | null;
+  stripe_checkout_expires_at: Date | null;
   created_at: Date;
 }
 
@@ -100,14 +103,30 @@ export async function confirmAuditPayment(ctx: Ctx, id: string, input: Record<st
   if (audit.status !== "OFFERED") throw new ValidationError("Only an offered audit can be marked paid");
   const paidAt = optDate(input.paid_at, "Payment date") ?? new Date();
   const ref = optStr(input.payment_reference, 200);
-  await ctx.db.transaction(async (tx) => {
-    await tx.query("update audits set status = 'PAID', paid_at = $2, payment_reference = $3, updated_at = now() where id = $1", [id, paidAt, ref]);
-    await logAudit(tx, ctx.user, "audit", id, "payment_confirmed", { status: audit.status, paid_at: null }, { status: "PAID", paid_at: paidAt, payment_reference: ref, price_cents: audit.price_cents });
-    if (audit.opportunity_id) {
-      await tx.query("update opportunities set next_action = 'Kick off audit discovery', next_action_at = now() + interval '2 days', updated_at = now() where id = $1", [audit.opportunity_id]);
-    }
-    await autoAdvance(tx, ctx.user, audit.opportunity_id, "AUDIT_OFFERED", "AUDIT_PAID");
-  });
+  await ctx.db.transaction((tx) => markAuditPaid(tx, ctx.user, audit, { paidAt, reference: ref }));
+}
+
+/**
+ * The single payment transition, shared by manual confirmation and the Stripe webhook:
+ * OFFERED -> PAID, audit-logged, and the opportunity advances AUDIT_OFFERED -> AUDIT_PAID.
+ */
+export async function markAuditPaid(
+  tx: Queryable,
+  actor: SessionUser | null,
+  audit: Pick<AuditRow, "id" | "status" | "price_cents" | "opportunity_id">,
+  payment: { paidAt: Date; reference: string | null; actorLabel?: string; via?: string },
+) {
+  await tx.query("update audits set status = 'PAID', paid_at = $2, payment_reference = $3, updated_at = now() where id = $1", [audit.id, payment.paidAt, payment.reference]);
+  await logAudit(
+    tx, actor, "audit", audit.id, "payment_confirmed",
+    { status: audit.status, paid_at: null },
+    { status: "PAID", paid_at: payment.paidAt, payment_reference: payment.reference, price_cents: audit.price_cents, via: payment.via ?? "manual" },
+    payment.actorLabel,
+  );
+  if (audit.opportunity_id) {
+    await tx.query("update opportunities set next_action = 'Kick off audit discovery', next_action_at = now() + interval '2 days', updated_at = now() where id = $1", [audit.opportunity_id]);
+  }
+  await autoAdvance(tx, actor, audit.opportunity_id, "AUDIT_OFFERED", "AUDIT_PAID");
 }
 
 export async function startAudit(ctx: Ctx, id: string) {

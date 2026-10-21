@@ -28,7 +28,7 @@ Priority: P0 unless marked otherwise. Work in dependency order. IDs are stable.
 | TASK-022 | CSV exports | 006,020 | Leads/pipeline/KPIs export cleanly | ✅ Done |
 | TASK-023 | Critical-path E2E test | all P0 | Lead -> audit -> proposal -> deployment -> result passes | ✅ Done |
 | TASK-024 | Production deployment + backup/recovery note | 023 | Internal users can access stable v0.1 | ✅ Done — live at https://rh-agentic-operations.vercel.app |
-| TASK-025 | Stripe payment webhook | P1 | Paid audit status automated | Not started (P1/P2) |
+| TASK-025 | Stripe payment webhook | P1 | Paid audit status automated | ✅ Done — Checkout link + signed webhook; manual confirmation kept for non-US clients; needs Stripe keys to activate |
 | TASK-026 | SOP/playbook library | P2 | Only after real usage justifies it | Not started (P1/P2) |
 
 ## Critical path

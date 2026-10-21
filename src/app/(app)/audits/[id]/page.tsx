@@ -2,11 +2,12 @@ import Link from "next/link";
 import { load, requireCtx } from "@/lib/auth/current";
 import { can } from "@/lib/auth/user";
 import {
-  addProcessAction, cancelAuditAction, confirmAuditPaymentAction, createProposalFromPilotAction, presentAuditAction, setRecommendedPilotAction,
+  addProcessAction, cancelAuditAction, confirmAuditPaymentAction, createAuditCheckoutAction, createProposalFromPilotAction, presentAuditAction, setRecommendedPilotAction,
   startAuditAction, updateAuditDiscoveryAction,
 } from "@/app/actions";
 import { classificationLabel, getAuditWorkspace } from "@/server/audits";
 import { listActiveUsers } from "@/server/crm";
+import { stripeConfigured } from "@/server/stripe";
 import { formatCents } from "@/domain/money";
 import { Badge, Card, Empty, Field, fmtDate, fmtDateTime, fmtNum, fmtPct, Hidden, KV, Money, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -24,6 +25,7 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
   const back = `/audits/${id}`;
   const pilot = ws.agenticOpportunities.find((a) => a.recommended_for_pilot);
   const cur = audit.currency;
+  const stripeOn = stripeConfigured();
 
   return (
     <div className="space-y-4">
@@ -35,13 +37,6 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
           {audit.regulated ? <> · <Badge tone="amber">regulated vertical — administrative/operational scope only</Badge></> : null}
         </>}
         actions={<>
-          {audit.status === "OFFERED" && can(ctx.user, "audit.sell") ? (
-            <form action={confirmAuditPaymentAction} className="flex items-end gap-2">
-              <Hidden name="id" value={id} />
-              <input className="input w-44" name="payment_reference" placeholder="Payment reference" />
-              <SubmitButton>Confirm payment</SubmitButton>
-            </form>
-          ) : null}
           {audit.status === "PAID" && canWrite ? <form action={startAuditAction}><Hidden name="id" value={id} /><SubmitButton>Start discovery</SubmitButton></form> : null}
           {audit.status === "IN_PROGRESS" && canWrite ? (
             <form action={presentAuditAction} className="flex items-end gap-2">
@@ -55,6 +50,38 @@ export default async function AuditWorkspacePage({ params }: { params: Promise<{
           ) : null}
         </>}
       />
+
+      {audit.status === "OFFERED" && can(ctx.user, "audit.sell") ? (
+        <Card title={`Collect audit payment · ${formatCents(audit.price_cents, cur)}`}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-medium">Manual confirmation <span className="font-normal text-slate-500">— any client (transfer, Yape, Zelle, card terminal…)</span></h3>
+              <form action={confirmAuditPaymentAction} className="mt-2 flex flex-wrap items-end gap-2">
+                <Hidden name="id" value={id} />
+                <input className="input w-56" name="payment_reference" placeholder="Payment reference (optional)" />
+                <SubmitButton>Confirm payment received</SubmitButton>
+              </form>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium">Stripe payment link <span className="font-normal text-slate-500">— US clients, card payment</span></h3>
+              {!stripeOn ? (
+                <p className="muted mt-2">Stripe is not configured on this environment.</p>
+              ) : audit.stripe_checkout_url && audit.stripe_checkout_expires_at && new Date(audit.stripe_checkout_expires_at) > new Date() ? (
+                <div className="mt-2 space-y-1">
+                  <input className="input font-mono text-xs" readOnly value={audit.stripe_checkout_url} aria-label="Stripe payment link" />
+                  <p className="text-xs text-slate-500">Send this link to the client. It expires {fmtDateTime(audit.stripe_checkout_expires_at)}; the audit is marked paid automatically when they pay.</p>
+                </div>
+              ) : (
+                <form action={createAuditCheckoutAction} className="mt-2">
+                  <Hidden name="id" value={id} />
+                  <SubmitButton className="btn">Create Stripe payment link</SubmitButton>
+                  <p className="mt-1 text-xs text-slate-500">Valid 24 hours. Payment is confirmed automatically.</p>
+                </form>
+              )}
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="Price" value={formatCents(audit.price_cents, cur)} hint={audit.paid_at ? `paid ${fmtDate(audit.paid_at)}` : "not paid"} />

@@ -10,6 +10,7 @@ import * as audits from "@/server/audits";
 import * as proposals from "@/server/proposals";
 import * as deployments from "@/server/deployments";
 import * as admin from "@/server/admin";
+import { createAuditCheckout } from "@/server/stripe";
 import { SCORE_DIMENSIONS } from "@/domain/scoring";
 import { parseMoneyToCents } from "@/domain/money";
 
@@ -111,6 +112,11 @@ export async function offerAuditAction(fd: FormData) {
 export async function confirmAuditPaymentAction(fd: FormData) {
   const id = s(fd, "id");
   await run(`/audits/${id}`, (ctx) => audits.confirmAuditPayment(ctx, id, formObject(fd)), { success: "Payment confirmed" });
+}
+
+export async function createAuditCheckoutAction(fd: FormData) {
+  const id = s(fd, "id");
+  await run(`/audits/${id}`, (ctx) => createAuditCheckout(ctx, id), { success: "Stripe payment link ready — copy it and send it to the client" });
 }
 
 export async function startAuditAction(fd: FormData) {

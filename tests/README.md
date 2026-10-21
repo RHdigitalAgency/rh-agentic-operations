@@ -31,6 +31,7 @@ A production release is blocked if this critical-path test fails.
 | `tests/integration/rbac.test.ts` | Role restrictions via direct service/API access, auth/sessions |
 | `tests/integration/ingestion.test.ts` | Idempotency, attribution, contact dedupe, signature verification |
 | `tests/integration/instagram-ingestion.test.ts` | Simulated Instagram lead (fixture): all fields stored; invalid/unsigned signature rejected; malformed payloads rejected |
+| `tests/integration/stripe.test.ts` | Stripe signature verification, Checkout link (mocked API), webhook marks paid / idempotent / amount checks, manual path still works |
 | `tests/integration/api-and-seed.test.ts` | HTTP contract of `/api/integrations/leads`; demo seed + dashboard reconciliation |
 
 Run all: `npm test` (each file migrates a fresh in-memory Postgres). Against real Postgres: `TEST_DATABASE_URL=<session pooler URL> npm test` (disposable schema per file).

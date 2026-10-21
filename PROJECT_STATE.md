@@ -8,7 +8,7 @@ Date: 2026-10-20
 - PostgreSQL schema as SQL migrations (`database/migrations/`), deterministic reference data, local demo seed.
 - Service layer (`src/server/`) holding all business rules and data-level RBAC. Pages, server actions and API routes are thin wrappers.
 - Pure, unit-tested domain logic (`src/domain/`): pipeline rules, scoring, ROI, KPI comparison, analytics, money.
-- 68 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
+- 74 automated tests (unit, integration, RBAC, ingestion HTTP contract incl. Instagram payload, driver, critical-path E2E, seed reconciliation). They pass on embedded Postgres (`npm test`) and on Supabase (`TEST_DATABASE_URL=… npm test`).
 
 ## Hosting
 - Code: https://github.com/RHdigitalAgency/rh-agentic-operations (private). Connected to Vercel: push to `main` → production; other branches → preview.
@@ -22,7 +22,9 @@ Date: 2026-10-20
 - **External Instagram Automation – pending connection, non-blocking.** The receiving side is done: `POST /api/integrations/leads` (signed, idempotent, flat Instagram fields) is documented in the README, with a fixture (`tests/fixtures/instagram-lead.json`), a simulator (`npm run lead:simulate`) and tests (`tests/integration/instagram-ingestion.test.ts`). Manual lead entry covers the gap. Nothing in this repo builds the Instagram automation itself.
 
 ## Backlog
-TASK-001 → TASK-024 done (see `tasks/BACKLOG.md`). Open: TASK-025 Stripe webhook (P1, hook point `confirmAuditPayment`), TASK-026 SOP library (P2, only after real usage).
+TASK-001 → TASK-025 done (see `tasks/BACKLOG.md`). Open: TASK-026 SOP library (P2, only after real usage).
+
+Payments: manual confirmation for all clients (standard for non-US); Stripe Checkout link + signed webhook for US card payments. Stripe is **inactive until keys are added** (README → "Audit payments").
 
 ## Architecture decisions that differ from the starter docs
 - ADR-0003: embedded Postgres (PGlite) for local/test; in-app session auth instead of Supabase Auth for v0.1; RBAC in the service layer, not RLS.
@@ -40,10 +42,11 @@ TASK-001 → TASK-024 done (see `tasks/BACKLOG.md`). Open: TASK-025 Stripe webho
 8. Postgres driver runs with pipelining disabled (`max_pipeline: 0`), because Supabase's transaction pooler hung parallel queries. Re-run the real-Postgres suite after driver or schema changes.
 
 ## Next actions
-1. When the Instagram automation is ready: share the secret privately and point it at the README contract.
-2. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
-3. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
-4. Add team members in Settings when they start using it.
+1. Activate Stripe when ready (test mode first): add `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL` in Vercel and create the webhook endpoint (README).
+2. When the Instagram automation is ready: share the secret privately and point it at the README contract.
+3. UI improvements. Develop locally on PGlite with demo data; use Vercel previews for review.
+4. Before real client data: create a separate staging Supabase project and enable backups (Supabase Pro).
+5. Add team members in Settings when they start using it.
 
 ## Validation clock
 Starts when real RH users and real prospects/clients enter the system (see `docs/10_BUSINESS_VALIDATION.md`).

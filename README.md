@@ -109,6 +109,19 @@ await fetch(url, { method: "POST", headers: { "content-type": "application/json"
 - `npm run lead:simulate -- --replay` keeps the fixture's ID, so a second run shows the duplicate response.
 - Add `--url https://…` to target another environment, and `--file path.json` for a custom payload.
 
+### Audit payments: manual or Stripe
+Each unpaid audit shows two options:
+- **Manual confirmation:** the standard path for any client (transfer, Yape, Zelle, card terminal…). Enter an optional reference and confirm.
+- **Stripe payment link:** for US clients paying by card. **Create Stripe payment link** makes a Stripe Checkout page for the audit's exact price (valid 24 h). Send it to the client. When they pay, Stripe calls `POST /api/integrations/stripe`, the audit is marked paid, and the deal moves to *Audit Paid* automatically.
+
+The webhook only changes payment state. It requires a valid Stripe signature, and it only marks an audit paid when the amount and currency match the price exactly. Anything else is logged for review. Both paths use the same transition and audit log.
+
+**Turn Stripe on** (test mode first):
+1. Stripe Dashboard → Developers → API keys: put the secret key in Vercel as `STRIPE_SECRET_KEY` (Production).
+2. Stripe Dashboard → Developers → Webhooks → **Add endpoint**: `https://rh-agentic-operations.vercel.app/api/integrations/stripe`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy its signing secret into Vercel as `STRIPE_WEBHOOK_SECRET` (Production).
+3. Set `NEXT_PUBLIC_APP_URL=https://rh-agentic-operations.vercel.app` (Production) so clients return to the confirmation page (`/paid`).
+4. Redeploy. Without these variables the Stripe button stays hidden and the webhook returns 503.
+
 ## Source of truth
 
 `docs/01_STRATEGIC_PLAN.md` and `docs/02_PLATFORM_PDR.md` define the business and product; `docs/03`–`10` add the technical layer (architecture, data model, API contract, acceptance criteria, domain rules, security). Coding agents follow `AGENTS.md`. Decisions that differ from those docs are recorded in `adrs/`.
